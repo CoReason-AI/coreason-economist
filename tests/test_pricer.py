@@ -9,7 +9,6 @@
 # Source Code: https://github.com/CoReason-AI/coreason_economist
 
 import pytest
-
 from coreason_economist.models import Budget
 from coreason_economist.pricer import Pricer
 from coreason_economist.rates import ModelRate, ToolRate
