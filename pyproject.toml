@@ -54,6 +54,7 @@ select = ["E", "F", "B", "I"]
 ignore = []
 
 [tool.mypy]
+plugins = ["pydantic.mypy"]
 python_version = "3.12"
 strict = true
 ignore_missing_imports = true
