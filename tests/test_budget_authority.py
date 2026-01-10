@@ -11,6 +11,7 @@
 from unittest.mock import Mock
 
 import pytest
+
 from coreason_economist.budget_authority import BudgetAuthority
 from coreason_economist.exceptions import BudgetExhaustedError
 from coreason_economist.models import Budget, RequestPayload

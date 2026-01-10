@@ -9,8 +9,9 @@
 # Source Code: https://github.com/CoReason-AI/coreason_economist
 
 import pytest
-from coreason_economist.models import Budget, Decision, EconomicTrace, RequestPayload
 from pydantic import ValidationError
+
+from coreason_economist.models import Budget, Decision, EconomicTrace, RequestPayload
 
 
 def test_budget_creation() -> None:

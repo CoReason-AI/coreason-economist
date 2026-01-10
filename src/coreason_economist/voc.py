@@ -35,6 +35,11 @@ class VOCEngine:
         """
         Calculates the similarity between two text strings using a lightweight heuristic.
         Uses difflib.SequenceMatcher (Ratcliff-Obershelp algorithm).
+
+        Note:
+            - This is a lexical similarity check, not semantic. It may not detect
+              semantic convergence where different words mean the same thing.
+            - Performance: O(N*M) complexity. May be slow for very large strings (e.g., >100k chars).
         """
         if not text_a and not text_b:
             return 1.0

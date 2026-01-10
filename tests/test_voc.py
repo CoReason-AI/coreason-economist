@@ -35,6 +35,17 @@ class TestVOCEngine:
         # difflib ratio is 2*M / T. M=4 ("appl"), T=10. 8/10 = 0.8.
         assert 0.7 < engine._calculate_similarity("apple", "apply") < 0.9
 
+    def test_similarity_edge_cases(self) -> None:
+        """Test empty string edge cases for 100% coverage."""
+        engine = VOCEngine()
+
+        # Both empty -> 1.0 similarity (identical)
+        assert engine._calculate_similarity("", "") == 1.0
+
+        # One empty -> 0.0 similarity
+        assert engine._calculate_similarity("", "abc") == 0.0
+        assert engine._calculate_similarity("abc", "") == 0.0
+
     def test_insufficient_history(self) -> None:
         engine = VOCEngine()
 
