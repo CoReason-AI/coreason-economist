@@ -120,7 +120,7 @@ def test_unicode_handling() -> None:
 def test_extreme_values() -> None:
     """Test handling of large numbers."""
     large_financial = 1e9  # 1 billion dollars
-    large_tokens = 10**9   # 1 billion tokens
+    large_tokens = 10**9  # 1 billion tokens
 
     budget = Budget(financial=large_financial, token_volume=large_tokens)
     assert budget.financial == large_financial
