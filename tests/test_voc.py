@@ -9,6 +9,8 @@
 # Source Code: https://github.com/CoReason-AI/coreason_economist
 
 
+import json
+
 from coreason_economist.models import ReasoningTrace, VOCDecision
 from coreason_economist.voc import VOCEngine
 
@@ -118,4 +120,110 @@ class TestVOCEngine:
         trace = ReasoningTrace(steps=[stepA, stepB, stepA, stepB])
         result = engine.evaluate(trace)
 
+        assert result.decision == VOCDecision.CONTINUE
+
+    def test_whitespace_sensitivity(self) -> None:
+        """Test how the engine handles whitespace differences."""
+        engine = VOCEngine()
+
+        text_a = "The quick brown fox"
+        text_b = "The quick brown fox "  # Trailing space
+
+        # Expect high similarity but not 1.0
+        similarity = engine._calculate_similarity(text_a, text_b)
+        assert 0.9 < similarity < 1.0
+
+        # With significant whitespace change
+        text_c = "The     quick     brown     fox"
+        similarity_c = engine._calculate_similarity(text_a, text_c)
+        assert similarity_c < 0.9  # Should be lower
+
+    def test_case_sensitivity(self) -> None:
+        """Test case sensitivity."""
+        engine = VOCEngine()
+
+        text_a = "STOP"
+        text_b = "stop"
+
+        # Expect low similarity due to case difference in short string
+        # S != s, T != t, etc.
+        similarity = engine._calculate_similarity(text_a, text_b)
+        assert similarity == 0.0
+
+        text_long_a = "The answer is definitely forty-two."
+        text_long_b = "The answer is definitely FORTY-TWO."
+        # Longer string shares more common chars, so similarity is non-zero but < 1.0
+        similarity_long = engine._calculate_similarity(text_long_a, text_long_b)
+        assert 0.5 < similarity_long < 1.0
+
+    def test_json_structure_sensitivity(self) -> None:
+        """
+        Test that JSON with reordered keys is treated as different.
+        This confirms the engine is lexical, not semantic.
+        """
+        engine = VOCEngine()
+
+        obj_a = {"name": "Alice", "age": 30}
+        obj_b = {"age": 30, "name": "Alice"}
+
+        text_a = json.dumps(obj_a)
+        text_b = json.dumps(obj_b)
+
+        # Lexically these strings are quite different:
+        # '{"name": "Alice", "age": 30}'
+        # '{"age": 30, "name": "Alice"}'
+        similarity = engine._calculate_similarity(text_a, text_b)
+
+        # They share content, so > 0, but reordering lowers the score significantly
+        assert similarity < 0.95
+        assert similarity > 0.4
+
+    def test_large_payloads(self) -> None:
+        """
+        Test performance/correctness with large inputs.
+        Simulating a scenario with ~50k characters.
+        """
+        engine = VOCEngine()
+
+        # Create a large base string
+        base_chunk = "The quick brown fox jumps over the lazy dog. " * 1000  # ~45k chars
+        text_a = base_chunk
+        text_b = base_chunk + "And then it slept."
+
+        # Should be very similar
+        similarity = engine._calculate_similarity(text_a, text_b)
+        assert similarity > 0.99
+        assert similarity < 1.0
+
+        trace = ReasoningTrace(steps=[text_a, text_b])
+        result = engine.evaluate(trace)
+
+        # With default threshold 0.95, this should STOP
+        assert result.decision == VOCDecision.STOP
+        assert "Diminishing returns" in result.reason
+
+    def test_code_block_similarity(self) -> None:
+        """Test similarity on code blocks with comment changes."""
+        engine = VOCEngine()
+
+        code_a = """
+        def add(a, b):
+            # Adds two numbers
+            return a + b
+        """
+
+        code_b = """
+        def add(a, b):
+            # This function adds two integers
+            return a + b
+        """
+
+        similarity = engine._calculate_similarity(code_a, code_b)
+
+        # High similarity expected, but definitely not 1.0
+        assert 0.8 < similarity < 0.95
+
+        # Should likely CONTINUE if threshold is 0.95
+        trace = ReasoningTrace(steps=[code_a, code_b])
+        result = engine.evaluate(trace, threshold=0.95)
         assert result.decision == VOCDecision.CONTINUE
