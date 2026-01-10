@@ -49,12 +49,33 @@ def test_budget_immutability() -> None:
         budget.financial = 20.0  # type: ignore
 
 
+def test_budget_equality() -> None:
+    """Test value equality for Budget objects."""
+    b1 = Budget(financial=10.0, latency_ms=100.0, token_volume=1000)
+    b2 = Budget(financial=10.0, latency_ms=100.0, token_volume=1000)
+    b3 = Budget(financial=20.0, latency_ms=100.0, token_volume=1000)
+
+    assert b1 == b2
+    assert b1 != b3
+
+
 def test_request_payload_creation() -> None:
     """Test creating a RequestPayload."""
     payload = RequestPayload(model_name="gpt-4", prompt="Hello world", estimated_output_tokens=100)
     assert payload.model_name == "gpt-4"
     assert payload.prompt == "Hello world"
     assert payload.estimated_output_tokens == 100
+
+
+def test_request_payload_validation_missing_fields() -> None:
+    """Test that RequestPayload requires mandatory fields."""
+    with pytest.raises(ValidationError):
+        # Missing prompt
+        RequestPayload(model_name="gpt-4")  # type: ignore
+
+    with pytest.raises(ValidationError):
+        # Missing model_name
+        RequestPayload(prompt="Hello")  # type: ignore
 
 
 def test_request_payload_with_budget() -> None:
@@ -80,6 +101,30 @@ def test_request_payload_complex_tool_calls() -> None:
     payload = RequestPayload(model_name="gpt-4", prompt="Check weather", tool_calls=tool_calls)
     assert payload.tool_calls is not None
     assert payload.tool_calls[0]["function"]["arguments"]["nested"]["key"] == [1, 2, 3]
+
+
+def test_unicode_handling() -> None:
+    """Test handling of Unicode characters."""
+    prompt = "Hello 🌍! 你好!"
+    model = "gpt-4-🚀"
+    payload = RequestPayload(model_name=model, prompt=prompt)
+
+    assert payload.prompt == prompt
+    assert payload.model_name == model
+
+    # Ensure serialization preserves unicode
+    json_str = payload.model_dump_json()
+    assert "🌍" in json_str or "\\ud83c\\udf0d" in json_str  # Depends on json dumper settings
+
+
+def test_extreme_values() -> None:
+    """Test handling of large numbers."""
+    large_financial = 1e9  # 1 billion dollars
+    large_tokens = 10**9   # 1 billion tokens
+
+    budget = Budget(financial=large_financial, token_volume=large_tokens)
+    assert budget.financial == large_financial
+    assert budget.token_volume == large_tokens
 
 
 def test_economic_trace_creation() -> None:
