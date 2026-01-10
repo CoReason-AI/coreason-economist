@@ -121,21 +121,11 @@ def test_voc_score_boundaries() -> None:
     est_budget = Budget(financial=0.1)
 
     # Test 0.0
-    trace_zero = EconomicTrace(
-        estimated_cost=est_budget,
-        decision=Decision.REJECTED,
-        voc_score=0.0,
-        model_used="gpt-4"
-    )
+    trace_zero = EconomicTrace(estimated_cost=est_budget, decision=Decision.REJECTED, voc_score=0.0, model_used="gpt-4")
     assert trace_zero.voc_score == 0.0
 
     # Test 1.0
-    trace_one = EconomicTrace(
-        estimated_cost=est_budget,
-        decision=Decision.APPROVED,
-        voc_score=1.0,
-        model_used="gpt-4"
-    )
+    trace_one = EconomicTrace(estimated_cost=est_budget, decision=Decision.APPROVED, voc_score=1.0, model_used="gpt-4")
     assert trace_one.voc_score == 1.0
 
 
@@ -147,7 +137,7 @@ def test_json_roundtrip() -> None:
         decision=Decision.MODIFIED,
         voc_score=0.75,
         model_used="gpt-3.5-turbo",
-        reason="Cost optimized"
+        reason="Cost optimized",
     )
 
     # Serialize
