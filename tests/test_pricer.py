@@ -1,0 +1,145 @@
+# Copyright (c) 2025 CoReason, Inc.
+#
+# This software is proprietary and dual-licensed.
+# Licensed under the Prosperity Public License 3.0 (the "License").
+# A copy of the license is available at https://prosperitylicense.com/versions/3.0.0
+# For details, see the LICENSE file.
+# Commercial use beyond a 30-day trial requires a separate license.
+#
+# Source Code: https://github.com/CoReason-AI/coreason_economist
+
+import pytest
+from coreason_economist.models import Budget
+from coreason_economist.pricer import Pricer
+from coreason_economist.rates import ModelRate
+
+
+def test_pricer_init_default() -> None:
+    """Test Pricer initialization with default rates."""
+    pricer = Pricer()
+    assert "gpt-4o" in pricer.rates
+    assert "gpt-4o-mini" in pricer.rates
+    assert pricer.heuristic_multiplier == 0.2
+
+
+def test_pricer_init_custom() -> None:
+    """Test Pricer initialization with custom rates."""
+    custom_rates = {
+        "custom-model": ModelRate(input_cost_per_1k=1.0, output_cost_per_1k=2.0, latency_ms_per_output_token=10.0)
+    }
+    pricer = Pricer(rates=custom_rates, heuristic_multiplier=0.5)
+    assert "custom-model" in pricer.rates
+    assert "gpt-4o" not in pricer.rates
+    assert pricer.heuristic_multiplier == 0.5
+
+
+def test_estimate_financial_cost_gpt4o() -> None:
+    """Test cost calculation for GPT-4o."""
+    pricer = Pricer()
+    # GPT-4o: Input $0.005/1k, Output $0.015/1k
+    # 1000 input, 1000 output -> 0.005 + 0.015 = 0.02
+    cost = pricer.estimate_financial_cost("gpt-4o", 1000, 1000)
+    assert cost == pytest.approx(0.02)
+
+
+def test_estimate_request_cost_explicit_output() -> None:
+    """Test returning a Budget object with explicit output tokens."""
+    pricer = Pricer()
+    budget = pricer.estimate_request_cost("gpt-4o", 1000, 1000)
+
+    assert isinstance(budget, Budget)
+    assert budget.financial == pytest.approx(0.02)
+    assert budget.token_volume == 2000
+    # Latency: 1000 output * 12ms = 12000ms
+    assert budget.latency_ms == 12000.0
+
+
+def test_estimate_request_cost_heuristic() -> None:
+    """Test heuristic estimation when output_tokens is None."""
+    pricer = Pricer(heuristic_multiplier=0.2)
+    # 1000 input -> 200 output estimated
+    budget = pricer.estimate_request_cost("gpt-4o", 1000)
+
+    assert budget.token_volume == 1200
+    # Financial: (1000 * 0.005/1k) + (200 * 0.015/1k) = 0.005 + 0.003 = 0.008
+    assert budget.financial == pytest.approx(0.008)
+    # Latency: 200 output * 12ms = 2400ms
+    assert budget.latency_ms == 2400.0
+
+
+def test_estimate_request_cost_heuristic_zero_input() -> None:
+    """Test heuristic with zero input."""
+    pricer = Pricer()
+    budget = pricer.estimate_request_cost("gpt-4o", 0)
+    assert budget.token_volume == 0
+    assert budget.financial == 0.0
+    assert budget.latency_ms == 0.0
+
+
+def test_estimate_request_cost_heuristic_small_input() -> None:
+    """Test heuristic ensures at least 1 output token for non-zero input."""
+    pricer = Pricer(heuristic_multiplier=0.001)  # Very small multiplier
+    # 10 input -> 0.01 output -> 0 int. Should enforce 1 if input > 0
+    budget = pricer.estimate_request_cost("gpt-4o", 10)
+
+    assert budget.token_volume == 11  # 10 input + 1 estimated output
+    assert budget.latency_ms > 0
+
+
+def test_estimate_financial_cost_negative_tokens() -> None:
+    """Test that negative token counts raise ValueError."""
+    pricer = Pricer()
+    with pytest.raises(ValueError, match="Token counts cannot be negative"):
+        pricer.estimate_financial_cost("gpt-4o", -10, 10)
+
+
+def test_estimate_request_cost_negative_input() -> None:
+    """Test negative input for request cost."""
+    pricer = Pricer()
+    with pytest.raises(ValueError, match="Token counts cannot be negative"):
+        pricer.estimate_request_cost("gpt-4o", -10)
+
+
+def test_estimate_request_cost_negative_output() -> None:
+    """Test negative output for request cost."""
+    pricer = Pricer()
+    with pytest.raises(ValueError, match="Token counts cannot be negative"):
+        pricer.estimate_request_cost("gpt-4o", 10, -5)
+
+
+def test_estimate_latency_ms() -> None:
+    """Test latency estimation directly."""
+    pricer = Pricer()
+    latency = pricer.estimate_latency_ms("gpt-4o", 100)
+    assert latency == 1200.0  # 100 * 12ms
+
+
+def test_estimate_latency_negative_tokens() -> None:
+    """Test latency estimation with negative tokens."""
+    pricer = Pricer()
+    with pytest.raises(ValueError, match="Token counts cannot be negative"):
+        pricer.estimate_latency_ms("gpt-4o", -10)
+
+
+def test_estimate_latency_unknown_model() -> None:
+    """Test latency for unknown model."""
+    pricer = Pricer()
+    with pytest.raises(ValueError):
+        pricer.estimate_latency_ms("unknown", 100)
+
+
+def test_estimate_financial_cost_free_model() -> None:
+    """Test cost calculation for a free model."""
+    free_rates = {
+        "free-model": ModelRate(input_cost_per_1k=0.0, output_cost_per_1k=0.0, latency_ms_per_output_token=1.0)
+    }
+    pricer = Pricer(rates=free_rates)
+    cost = pricer.estimate_financial_cost("free-model", 10000, 10000)
+    assert cost == 0.0
+
+
+def test_unknown_model_in_estimate_financial_cost() -> None:
+    """Test that unknown models raise ValueError in estimate_financial_cost."""
+    pricer = Pricer()
+    with pytest.raises(ValueError, match="Unknown model: unknown"):
+        pricer.estimate_financial_cost("unknown", 100, 100)
