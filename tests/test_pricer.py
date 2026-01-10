@@ -28,9 +28,7 @@ def test_pricer_init_custom() -> None:
     custom_rates = {
         "custom-model": ModelRate(input_cost_per_1k=1.0, output_cost_per_1k=2.0, latency_ms_per_output_token=10.0)
     }
-    custom_tool_rates = {
-        "custom-tool": ToolRate(cost_per_call=5.0)
-    }
+    custom_tool_rates = {"custom-tool": ToolRate(cost_per_call=5.0)}
     pricer = Pricer(rates=custom_rates, tool_rates=custom_tool_rates, heuristic_multiplier=0.5)
     assert "custom-model" in pricer.rates
     assert "gpt-4o" not in pricer.rates

@@ -11,17 +11,17 @@
 from coreason_economist.rates import ToolRate
 
 
-def test_tool_rate_creation():
+def test_tool_rate_creation() -> None:
     """Test creating a ToolRate."""
     rate = ToolRate(cost_per_call=0.01)
     assert rate.cost_per_call == 0.01
 
 
-def test_tool_rate_immutability():
+def test_tool_rate_immutability() -> None:
     """Test that ToolRate is frozen."""
     rate = ToolRate(cost_per_call=0.01)
     try:
-        rate.cost_per_call = 0.02
+        rate.cost_per_call = 0.02  # type: ignore[misc]
         raise AssertionError("Should not be able to modify frozen model")
     except Exception:
         pass
