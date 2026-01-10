@@ -13,20 +13,31 @@ from pathlib import Path
 
 from loguru import logger
 
+# Explicitly export logger
+__all__ = ["logger"]
+
 # Remove default handler
 logger.remove()
 
 # Sink 1: Stdout (Human-readable)
+# Split format string to satisfy line length limit
+LOG_FORMAT = (
+    "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
+    "<level>{level: <8}</level> | "
+    "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
+    "<level>{message}</level>"
+)
+
 logger.add(
     sys.stderr,
     level="INFO",
-    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+    format=LOG_FORMAT,
 )
 
 # Ensure logs directory exists
 log_path = Path("logs")
 if not log_path.exists():
-    log_path.mkdir(parents=True, exist_ok=True)
+    log_path.mkdir(parents=True, exist_ok=True)  # pragma: no cover
 
 # Sink 2: File (JSON, Rotation, Retention)
 logger.add(
