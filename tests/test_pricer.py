@@ -201,3 +201,34 @@ def test_estimate_request_cost_with_tools() -> None:
     budget = pricer.estimate_request_cost("gpt-4o", 1000, 1000, tool_calls=tool_calls)
     assert budget.financial == pytest.approx(0.04)
     assert budget.token_volume == 2000
+
+
+def test_estimate_tools_cost_high_volume() -> None:
+    """Test high volume of tool calls to ensure accurate summation."""
+    pricer = Pricer()
+    # web_search cost is 0.01
+    count = 1000
+    tool_calls = [{"name": "web_search"} for _ in range(count)]
+    cost = pricer.estimate_tools_cost(tool_calls)
+    assert cost == pytest.approx(0.01 * count)
+
+
+def test_estimate_tools_cost_zero_cost() -> None:
+    """Test that zero-cost tools (like 'calculator') don't add to cost."""
+    pricer = Pricer()
+    # calculator is $0.0 in defaults
+    tool_calls = [{"name": "calculator"} for _ in range(50)]
+    cost = pricer.estimate_tools_cost(tool_calls)
+    assert cost == 0.0
+
+
+def test_tool_calls_malformed_structure() -> None:
+    """Test robust handling of weirdly nested structures."""
+    pricer = Pricer()
+    tool_calls = [
+        {"function": "not_a_dict"},  # Malformed function key
+        {"function": {}},  # Missing name inside function
+        {},  # Empty dict
+    ]
+    cost = pricer.estimate_tools_cost(tool_calls)  # type: ignore[arg-type]
+    assert cost == 0.0

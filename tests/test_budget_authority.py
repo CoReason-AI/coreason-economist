@@ -169,6 +169,67 @@ def test_tool_call_budget_integration() -> None:
     assert exc.value.estimated_value >= 0.05
 
 
+def test_budget_tipping_point_with_tools() -> None:
+    """
+    Test a scenario where the budget is met exactly by tokens, but one tool call fails it.
+    """
+    authority = BudgetAuthority()
+    # gpt-4o-mini: input $0.15/1M -> $0.00015/1k
+    # output $0.60/1M -> $0.0006/1k
+    # Let's say we have 1000 input tokens, 1000 output tokens.
+    # Cost = 0.00015 + 0.0006 = 0.00075.
+
+    budget_limit = 0.00075
+    # Case 1: Just tokens -> Should Pass (approx)
+    req1 = RequestPayload(
+        model_name="gpt-4o-mini",
+        prompt="x" * 4000,  # ~1000 tokens
+        estimated_output_tokens=1000,
+        max_budget=Budget(financial=budget_limit + 1e-9, latency_ms=10000.0, token_volume=10000),
+    )
+    assert authority.allow_execution(req1) is True
+
+    # Case 2: Add a cheap tool -> Should Fail
+    # database_query costs 0.005
+    req2 = RequestPayload(
+        model_name="gpt-4o-mini",
+        prompt="x" * 4000,
+        estimated_output_tokens=1000,
+        tool_calls=[{"name": "database_query"}],
+        max_budget=Budget(financial=budget_limit + 1e-9, latency_ms=10000.0, token_volume=10000),
+    )
+    with pytest.raises(BudgetExhaustedError) as exc:
+        authority.allow_execution(req2)
+    assert exc.value.limit_type == "financial"
+
+
+def test_mixed_valid_invalid_tools_budget() -> None:
+    """
+    Test that invalid tools (cost $0) do not trigger budget errors,
+    but valid expensive tools in the same request do.
+    """
+    authority = BudgetAuthority()
+
+    # Request with 10 invalid tools ($0) + 1 expensive tool ($0.01 web_search)
+    tool_calls = [{"name": "invalid_tool"} for _ in range(10)]
+    tool_calls.append({"name": "web_search"})
+
+    # Budget $0.005. Cost $0.01 (web_search) + $0.0 (others) + token costs
+    # Should fail.
+    req = RequestPayload(
+        model_name="gpt-4o-mini",
+        prompt="Test",
+        tool_calls=tool_calls,
+        max_budget=Budget(financial=0.005, latency_ms=10000.0, token_volume=10000),
+    )
+
+    with pytest.raises(BudgetExhaustedError) as exc:
+        authority.allow_execution(req)
+
+    # Verify the estimated value includes the web_search cost
+    assert exc.value.estimated_value >= 0.01
+
+
 # --- Edge Case Tests ---
 
 
