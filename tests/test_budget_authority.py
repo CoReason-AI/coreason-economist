@@ -146,6 +146,29 @@ def test_pricer_integration() -> None:
         authority.allow_execution(request_tiny)
 
 
+def test_tool_call_budget_integration() -> None:
+    """Test integration of tool costs with budget authority."""
+    authority = BudgetAuthority()
+    # web_search costs 0.01 per call
+
+    # Request with 5 tool calls = $0.05
+    tool_calls = [{"name": "web_search"} for _ in range(5)]
+
+    request = RequestPayload(
+        model_name="gpt-4o-mini",
+        prompt="Search",
+        tool_calls=tool_calls,
+        max_budget=Budget(financial=0.04, latency_ms=10000.0, token_volume=10000),
+    )
+
+    # Should fail because $0.05 + token cost > $0.04
+    with pytest.raises(BudgetExhaustedError) as exc:
+        authority.allow_execution(request)
+
+    assert exc.value.limit_type == "financial"
+    assert exc.value.estimated_value >= 0.05
+
+
 # --- Edge Case Tests ---
 
 

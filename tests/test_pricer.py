@@ -11,7 +11,7 @@
 import pytest
 from coreason_economist.models import Budget
 from coreason_economist.pricer import Pricer
-from coreason_economist.rates import ModelRate
+from coreason_economist.rates import ModelRate, ToolRate
 
 
 def test_pricer_init_default() -> None:
@@ -19,6 +19,7 @@ def test_pricer_init_default() -> None:
     pricer = Pricer()
     assert "gpt-4o" in pricer.rates
     assert "gpt-4o-mini" in pricer.rates
+    assert "web_search" in pricer.tool_rates
     assert pricer.heuristic_multiplier == 0.2
 
 
@@ -27,9 +28,13 @@ def test_pricer_init_custom() -> None:
     custom_rates = {
         "custom-model": ModelRate(input_cost_per_1k=1.0, output_cost_per_1k=2.0, latency_ms_per_output_token=10.0)
     }
-    pricer = Pricer(rates=custom_rates, heuristic_multiplier=0.5)
+    custom_tool_rates = {
+        "custom-tool": ToolRate(cost_per_call=5.0)
+    }
+    pricer = Pricer(rates=custom_rates, tool_rates=custom_tool_rates, heuristic_multiplier=0.5)
     assert "custom-model" in pricer.rates
     assert "gpt-4o" not in pricer.rates
+    assert "custom-tool" in pricer.tool_rates
     assert pricer.heuristic_multiplier == 0.5
 
 
@@ -143,3 +148,58 @@ def test_unknown_model_in_estimate_financial_cost() -> None:
     pricer = Pricer()
     with pytest.raises(ValueError, match="Unknown model: unknown"):
         pricer.estimate_financial_cost("unknown", 100, 100)
+
+
+def test_estimate_tools_cost_no_tools() -> None:
+    """Test tool cost estimation with no tools."""
+    pricer = Pricer()
+    assert pricer.estimate_tools_cost(None) == 0.0
+    assert pricer.estimate_tools_cost([]) == 0.0
+
+
+def test_estimate_tools_cost_simple_format() -> None:
+    """Test tool cost estimation with simple {'name': ...} format."""
+    pricer = Pricer()
+    # web_search cost is 0.01
+    tool_calls = [{"name": "web_search"}, {"name": "web_search"}]
+    cost = pricer.estimate_tools_cost(tool_calls)
+    assert cost == pytest.approx(0.02)
+
+
+def test_estimate_tools_cost_openai_format() -> None:
+    """Test tool cost estimation with OpenAI {'function': {'name': ...}} format."""
+    pricer = Pricer()
+    # web_search cost is 0.01
+    tool_calls = [{"function": {"name": "web_search", "arguments": "{}"}}]
+    cost = pricer.estimate_tools_cost(tool_calls)
+    assert cost == pytest.approx(0.01)
+
+
+def test_estimate_tools_cost_mixed_unknown() -> None:
+    """Test tool cost estimation with unknown tools."""
+    pricer = Pricer()
+    # web_search (0.01) + unknown (0.0) = 0.01
+    tool_calls = [{"name": "web_search"}, {"name": "unknown_tool"}]
+    cost = pricer.estimate_tools_cost(tool_calls)
+    assert cost == pytest.approx(0.01)
+
+
+def test_estimate_tools_cost_malformed() -> None:
+    """Test tool cost estimation with malformed tool call."""
+    pricer = Pricer()
+    tool_calls = [{"no_name": "whatsoever"}]
+    # Should log warning and cost 0.0
+    cost = pricer.estimate_tools_cost(tool_calls)
+    assert cost == 0.0
+
+
+def test_estimate_request_cost_with_tools() -> None:
+    """Test estimate_request_cost includes tool costs."""
+    pricer = Pricer()
+    # GPT-4o: 1000 in, 1000 out -> $0.02
+    # Tools: 2 web_search -> $0.02
+    # Total: $0.04
+    tool_calls = [{"name": "web_search"}, {"name": "web_search"}]
+    budget = pricer.estimate_request_cost("gpt-4o", 1000, 1000, tool_calls=tool_calls)
+    assert budget.financial == pytest.approx(0.04)
+    assert budget.token_volume == 2000
