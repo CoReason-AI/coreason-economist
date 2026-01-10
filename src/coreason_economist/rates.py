@@ -27,6 +27,17 @@ class ModelRate(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class ToolRate(BaseModel):
+    """
+    Rate card for a specific tool.
+    Prices are in USD per call.
+    """
+
+    cost_per_call: float = Field(..., description="Cost per single execution of the tool", ge=0.0)
+
+    model_config = ConfigDict(frozen=True)
+
+
 # Default rates (approximate as of late 2024/early 2025)
 DEFAULT_MODEL_RATES: Dict[str, ModelRate] = {
     "gpt-4o": ModelRate(
@@ -44,4 +55,11 @@ DEFAULT_MODEL_RATES: Dict[str, ModelRate] = {
         output_cost_per_1k=0.015,  # $15.00 / 1M
         latency_ms_per_output_token=15.0,  # Slower than GPT-4o
     ),
+}
+
+# Default tool rates
+DEFAULT_TOOL_RATES: Dict[str, ToolRate] = {
+    "web_search": ToolRate(cost_per_call=0.01),  # Premium search API
+    "calculator": ToolRate(cost_per_call=0.0),  # Local computation
+    "database_query": ToolRate(cost_per_call=0.005),  # Database access cost
 }

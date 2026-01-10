@@ -8,10 +8,11 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_economist
 
-from typing import Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from coreason_economist.models import Budget
-from coreason_economist.rates import DEFAULT_MODEL_RATES, ModelRate
+from coreason_economist.rates import DEFAULT_MODEL_RATES, DEFAULT_TOOL_RATES, ModelRate, ToolRate
+from coreason_economist.utils.logger import logger
 
 
 class Pricer:
@@ -22,6 +23,7 @@ class Pricer:
     def __init__(
         self,
         rates: Optional[Dict[str, ModelRate]] = None,
+        tool_rates: Optional[Dict[str, ToolRate]] = None,
         heuristic_multiplier: float = 0.2,
     ) -> None:
         """
@@ -29,6 +31,7 @@ class Pricer:
         If no rates are provided, uses the default registry.
         """
         self.rates = rates if rates is not None else DEFAULT_MODEL_RATES
+        self.tool_rates = tool_rates if tool_rates is not None else DEFAULT_TOOL_RATES
         self.heuristic_multiplier = heuristic_multiplier
 
     def estimate_financial_cost(self, model_name: str, input_tokens: int, output_tokens: int) -> float:
@@ -49,6 +52,35 @@ class Pricer:
 
         return input_cost + output_cost
 
+    def estimate_tools_cost(self, tool_calls: Optional[List[Dict[str, Any]]]) -> float:
+        """
+        Calculates the total cost of all tool calls in the list.
+        Supports direct {"name": "tool"} and OpenAI-style {"function": {"name": "tool"}} formats.
+        """
+        if not tool_calls:
+            return 0.0
+
+        total_tool_cost = 0.0
+        for call in tool_calls:
+            tool_name = None
+
+            # Try to get name from "name" key
+            if "name" in call:
+                tool_name = call["name"]
+            # Try to get name from "function" -> "name" key (OpenAI style)
+            elif "function" in call and isinstance(call["function"], dict) and "name" in call["function"]:
+                tool_name = call["function"]["name"]
+
+            if tool_name:
+                if tool_name in self.tool_rates:
+                    total_tool_cost += self.tool_rates[tool_name].cost_per_call
+                else:
+                    logger.warning(f"Unknown tool: {tool_name}. Assuming cost $0.0.")
+            else:
+                logger.warning("Could not determine tool name from call. Assuming cost $0.0.")
+
+        return total_tool_cost
+
     def estimate_latency_ms(self, model_name: str, output_tokens: int) -> float:
         """
         Estimates latency based on output token count.
@@ -62,10 +94,17 @@ class Pricer:
         rate = self.rates[model_name]
         return float(output_tokens) * rate.latency_ms_per_output_token
 
-    def estimate_request_cost(self, model_name: str, input_tokens: int, output_tokens: Optional[int] = None) -> Budget:
+    def estimate_request_cost(
+        self,
+        model_name: str,
+        input_tokens: int,
+        output_tokens: Optional[int] = None,
+        tool_calls: Optional[List[Dict[str, Any]]] = None,
+    ) -> Budget:
         """
         Creates a Budget object representing the estimated cost.
         If output_tokens is None, uses heuristics to estimate it.
+        Includes estimated cost of tool calls if provided.
         """
         if input_tokens < 0:
             raise ValueError("Token counts cannot be negative")
@@ -81,6 +120,10 @@ class Pricer:
             raise ValueError("Token counts cannot be negative")
 
         financial_cost = self.estimate_financial_cost(model_name, input_tokens, output_tokens)
+        tools_cost = self.estimate_tools_cost(tool_calls)
+
+        financial_cost += tools_cost
+
         latency_cost = self.estimate_latency_ms(model_name, output_tokens)
         total_tokens = input_tokens + output_tokens
 
