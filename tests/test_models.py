@@ -65,6 +65,43 @@ def test_request_payload_creation() -> None:
     assert payload.model_name == "gpt-4"
     assert payload.prompt == "Hello world"
     assert payload.estimated_output_tokens == 100
+    # Test new defaults
+    assert payload.agent_count == 1
+    assert payload.rounds == 1
+    assert payload.difficulty_score is None
+
+
+def test_request_payload_new_fields() -> None:
+    """Test initializing new fields: difficulty_score, agent_count, rounds."""
+    payload = RequestPayload(
+        model_name="gpt-4",
+        prompt="Multi-agent debate",
+        difficulty_score=0.8,
+        agent_count=5,
+        rounds=3,
+    )
+    assert payload.difficulty_score == 0.8
+    assert payload.agent_count == 5
+    assert payload.rounds == 3
+
+
+def test_request_payload_validation_new_fields() -> None:
+    """Test validation logic for new fields."""
+    # difficulty_score > 1.0
+    with pytest.raises(ValidationError):
+        RequestPayload(model_name="gpt-4", prompt="test", difficulty_score=1.5)
+
+    # difficulty_score < 0.0
+    with pytest.raises(ValidationError):
+        RequestPayload(model_name="gpt-4", prompt="test", difficulty_score=-0.1)
+
+    # agent_count < 1
+    with pytest.raises(ValidationError):
+        RequestPayload(model_name="gpt-4", prompt="test", agent_count=0)
+
+    # rounds < 1
+    with pytest.raises(ValidationError):
+        RequestPayload(model_name="gpt-4", prompt="test", rounds=0)
 
 
 def test_request_payload_validation_missing_fields() -> None:

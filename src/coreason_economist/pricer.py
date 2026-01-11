@@ -100,14 +100,28 @@ class Pricer:
         input_tokens: int,
         output_tokens: Optional[int] = None,
         tool_calls: Optional[List[Dict[str, Any]]] = None,
+        agent_count: int = 1,
+        rounds: int = 1,
     ) -> Budget:
         """
         Creates a Budget object representing the estimated cost.
         If output_tokens is None, uses heuristics to estimate it.
         Includes estimated cost of tool calls if provided.
+
+        Args:
+            model_name: Name of the model.
+            input_tokens: Number of input tokens per agent.
+            output_tokens: Number of output tokens per agent per round.
+            tool_calls: List of tool calls per agent per round.
+            agent_count: Number of agents participating (parallel execution assumed).
+            rounds: Number of sequential rounds.
         """
         if input_tokens < 0:
             raise ValueError("Token counts cannot be negative")
+        if agent_count < 1:
+            raise ValueError("Agent count must be at least 1")
+        if rounds < 1:
+            raise ValueError("Rounds must be at least 1")
 
         if output_tokens is None:
             # Heuristic: output is a fraction of input
@@ -119,16 +133,27 @@ class Pricer:
         elif output_tokens < 0:
             raise ValueError("Token counts cannot be negative")
 
-        financial_cost = self.estimate_financial_cost(model_name, input_tokens, output_tokens)
-        tools_cost = self.estimate_tools_cost(tool_calls)
+        # Calculate unit costs (per agent, per round)
+        financial_cost_unit = self.estimate_financial_cost(model_name, input_tokens, output_tokens)
+        tools_cost_unit = self.estimate_tools_cost(tool_calls)
+        latency_cost_unit = self.estimate_latency_ms(model_name, output_tokens)
+        token_volume_unit = input_tokens + output_tokens
 
-        financial_cost += tools_cost
+        # Scale by agent count and rounds
+        # Financial: every agent in every round costs money
+        total_financial = (financial_cost_unit + tools_cost_unit) * agent_count * rounds
 
-        latency_cost = self.estimate_latency_ms(model_name, output_tokens)
-        total_tokens = input_tokens + output_tokens
+        # Token Volume: every agent in every round consumes context
+        total_token_volume = token_volume_unit * agent_count * rounds
+
+        # Latency:
+        # Assumption: Agents within a round run in parallel, so latency is max of one agent.
+        # Rounds are sequential, so latencies sum up.
+        # total_latency = unit_latency * rounds
+        total_latency = latency_cost_unit * rounds
 
         return Budget(
-            financial=financial_cost,
-            token_volume=total_tokens,
-            latency_ms=latency_cost,
+            financial=total_financial,
+            token_volume=total_token_volume,
+            latency_ms=total_latency,
         )
