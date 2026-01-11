@@ -93,54 +93,56 @@ class Arbitrageur:
         # STRATEGY 1: Budget Fitting (High Difficulty / "Hard Stop" Fallback)
         # If budget is exceeded, we attempt to find a cheaper way.
         if budget_exceeded and request.max_budget:
-            # First try reducing topology (agents/rounds)
-            new_agent_count = request.agent_count
-            new_rounds = request.rounds
+            # First try reducing topology with the REQUESTED model.
+            # Priority: Reduce Rounds FIRST, then Agent Count.
+            # Maximize Agents > Maximize Rounds.
+            for a in range(request.agent_count, 0, -1):
+                for r in range(request.rounds, 0, -1):
+                    # Skip the original config since we know it failed
+                    if a == request.agent_count and r == request.rounds:
+                        continue
 
-            # If we are multi-agent/multi-round, try reducing to single-shot first
-            if new_agent_count > 1 or new_rounds > 1:
-                new_agent_count = 1
-                new_rounds = 1
+                    cost = self.pricer.estimate_request_cost(
+                        model_name=request.model_name,
+                        input_tokens=len(request.prompt) // 4,
+                        output_tokens=request.estimated_output_tokens,
+                        tool_calls=request.tool_calls,
+                        agent_count=a,
+                        rounds=r,
+                    )
 
-            # Check if topology reduction fixes it with current model
-            reduced_topo_cost = self.pricer.estimate_request_cost(
-                model_name=request.model_name,
-                input_tokens=len(request.prompt) // 4,
-                output_tokens=request.estimated_output_tokens,
-                tool_calls=request.tool_calls,
-                agent_count=new_agent_count,
-                rounds=new_rounds,
-            )
-
-            if self._is_within_limits(reduced_topo_cost, request.max_budget):
-                updates["agent_count"] = new_agent_count
-                updates["rounds"] = new_rounds
-                suggestion_found = True
-                # If difficulty is high, warn user
-                if request.difficulty_score and request.difficulty_score >= self.threshold:
-                    quality_warning = "Reduced to single-shot execution to fit budget constraints."
+                    if self._is_within_limits(cost, request.max_budget):
+                        updates["agent_count"] = a
+                        updates["rounds"] = r
+                        suggestion_found = True
+                        if request.difficulty_score and request.difficulty_score >= self.threshold:
+                            quality_warning = f"Reduced topology to {a} agents, {r} rounds to fit budget."
+                        break
+                if suggestion_found:
+                    break
 
             if not suggestion_found:
                 # Topology reduction wasn't enough (or wasn't possible), try cheapest model + reduced topology
+                # We default to single-shot (1A, 1R) for the cheapest model fallback
                 sorted_models = sorted(
                     self.rates.items(),
                     key=lambda item: item[1].input_cost_per_1k + item[1].output_cost_per_1k,
                 )
                 cheapest_name, _ = sorted_models[0]
 
-                # Check if cheapest fits
+                # Check if cheapest fits with single-shot
                 cheapest_cost = self.pricer.estimate_request_cost(
                     model_name=cheapest_name,
                     input_tokens=len(request.prompt) // 4,
                     output_tokens=request.estimated_output_tokens,
                     tool_calls=request.tool_calls,
-                    agent_count=new_agent_count,  # Use the reduced topology
-                    rounds=new_rounds,
+                    agent_count=1,
+                    rounds=1,
                 )
 
                 if self._is_within_limits(cheapest_cost, request.max_budget):
-                    updates["agent_count"] = new_agent_count
-                    updates["rounds"] = new_rounds
+                    updates["agent_count"] = 1
+                    updates["rounds"] = 1
                     updates["model_name"] = cheapest_name
                     suggestion_found = True
                     if request.difficulty_score and request.difficulty_score >= self.threshold:
