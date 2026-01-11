@@ -56,7 +56,9 @@ def test_budget_fitting_topology_only_high_difficulty() -> None:
     # 100 in, 100 out. Per agent: ~0.002.
     # 10 agents: 0.02.
     # Budget: 0.01.
-    # 1 agent fits.
+    # 5 agents fit (0.01).
+    # Prior logic: Reduced to 1 agent.
+    # New logic: Maximizes utility -> reduces to 5 agents.
 
     request = RequestPayload(
         model_name="gpt-4o",
@@ -71,10 +73,10 @@ def test_budget_fitting_topology_only_high_difficulty() -> None:
     suggestion = arbitrageur.recommend_alternative(request)
 
     assert suggestion is not None
-    assert suggestion.agent_count == 1  # Reduced
+    assert suggestion.agent_count == 5  # Reduced to fit budget (5 * 0.002 = 0.01)
     assert suggestion.model_name == "gpt-4o"  # Kept same model
     assert suggestion.quality_warning is not None
-    assert "Reduced to single-shot" in suggestion.quality_warning
+    assert "Reduced topology to" in suggestion.quality_warning
 
 
 def test_budget_fitting_topology_no_difficulty_score() -> None:
@@ -85,6 +87,9 @@ def test_budget_fitting_topology_no_difficulty_score() -> None:
     arbitrageur = Arbitrageur()
 
     # Request: Moderate cost, Unknown difficulty
+    # 10 agents -> 0.02. Budget -> 0.01.
+    # New logic: Reduces to 5 agents.
+
     request = RequestPayload(
         model_name="gpt-4o",
         prompt="A" * 400,
@@ -98,7 +103,7 @@ def test_budget_fitting_topology_no_difficulty_score() -> None:
     suggestion = arbitrageur.recommend_alternative(request)
 
     assert suggestion is not None
-    assert suggestion.agent_count == 1
+    assert suggestion.agent_count == 5
     assert suggestion.model_name == "gpt-4o"
     # Should NOT have the specific high-difficulty warning
     assert suggestion.quality_warning is None
@@ -125,6 +130,10 @@ def test_budget_fitting_topology_low_difficulty() -> None:
     suggestion = arbitrageur.recommend_alternative(request)
 
     assert suggestion is not None
+    # Strategy 1 fits budget at agent_count=5
+    # Strategy 2 then kicks in.
+    # It sets agent_count=1 (topology optimization for low difficulty)
+    # Then downgrades model.
     assert suggestion.agent_count == 1
     # Strategy 2 should kick in and downgrade to mini because it's cheaper and safe (low difficulty)
     assert suggestion.model_name == "gpt-4o-mini"
