@@ -85,3 +85,75 @@ def test_recommend_alternative_unknown_model() -> None:
 
     recommendation = arb.recommend_alternative(payload)
     assert recommendation is None
+
+
+def test_recommend_topology_reduction() -> None:
+    """Test that Arbitrageur recommends reducing topology for low difficulty tasks."""
+    arb = Arbitrageur(threshold=0.5)
+
+    # Complex topology, low difficulty
+    payload = RequestPayload(
+        model_name="gpt-4o",
+        prompt="simple question",
+        difficulty_score=0.2,
+        agent_count=5,
+        rounds=3,
+    )
+
+    recommendation = arb.recommend_alternative(payload)
+
+    assert recommendation is not None
+    assert recommendation.agent_count == 1
+    assert recommendation.rounds == 1
+    # It might also change the model, but primarily we want topology reduction
+    assert recommendation.difficulty_score == 0.2
+
+
+def test_recommend_topology_reduction_mixed() -> None:
+    """Test that Arbitrageur handles both model and topology opportunities."""
+    # Custom rates
+    rates: Dict[str, ModelRate] = {
+        "expensive": ModelRate(input_cost_per_1k=1.0, output_cost_per_1k=1.0, latency_ms_per_output_token=10),
+        "cheap": ModelRate(input_cost_per_1k=0.1, output_cost_per_1k=0.1, latency_ms_per_output_token=10),
+    }
+    arb = Arbitrageur(rates=rates, threshold=0.5)
+
+    # Expensive model AND complex topology
+    payload = RequestPayload(
+        model_name="expensive",
+        prompt="simple question",
+        difficulty_score=0.2,
+        agent_count=3,
+        rounds=2,
+    )
+
+    recommendation = arb.recommend_alternative(payload)
+
+    assert recommendation is not None
+    # We expect topology reduction as a priority or alongside model change.
+    # Let's assert it definitely does topology reduction.
+    assert recommendation.agent_count == 1
+    assert recommendation.rounds == 1
+    assert recommendation.model_name == "cheap"
+
+
+def test_no_topology_change_needed() -> None:
+    """Test that it doesn't change topology if already simple."""
+    arb = Arbitrageur(threshold=0.5)
+
+    payload = RequestPayload(
+        model_name="gpt-4o",
+        prompt="simple question",
+        difficulty_score=0.2,
+        agent_count=1,
+        rounds=1,
+    )
+
+    # It might still recommend a model change if gpt-4o is not the cheapest
+    # But it shouldn't change agent_count/rounds (they are already 1)
+
+    recommendation = arb.recommend_alternative(payload)
+
+    if recommendation:
+        assert recommendation.agent_count == 1
+        assert recommendation.rounds == 1
