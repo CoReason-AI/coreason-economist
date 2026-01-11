@@ -126,6 +126,20 @@ def test_estimate_latency_ms(mock_rates: Dict[str, ModelRate]) -> None:
     assert latency == 1000.0
 
 
+def test_estimate_latency_ms_negative_output(mock_rates: Dict[str, ModelRate]) -> None:
+    """Test negative output tokens in estimate_latency_ms."""
+    pricer = Pricer(rates=mock_rates)
+    with pytest.raises(ValueError, match="Token counts cannot be negative"):
+        pricer.estimate_latency_ms("gpt-4", -1)
+
+
+def test_estimate_latency_ms_unknown_model(mock_rates: Dict[str, ModelRate]) -> None:
+    """Test unknown model in estimate_latency_ms."""
+    pricer = Pricer(rates=mock_rates)
+    with pytest.raises(ValueError, match="Unknown model"):
+        pricer.estimate_latency_ms("unknown", 100)
+
+
 def test_estimate_request_cost_simple(mock_rates: Dict[str, ModelRate]) -> None:
     pricer = Pricer(rates=mock_rates, heuristic_multiplier=1.0)
     # Input 1000, output 1000 (heuristic 1.0)
@@ -146,6 +160,13 @@ def test_estimate_request_cost_with_overrides(mock_rates: Dict[str, ModelRate]) 
     budget = pricer.estimate_request_cost("gpt-4", 1000, output_tokens=500)
     assert budget.financial == 0.06
     assert budget.latency_ms == 5000.0
+
+
+def test_estimate_request_cost_negative_input(mock_rates: Dict[str, ModelRate]) -> None:
+    """Test negative input tokens in estimate_request_cost."""
+    pricer = Pricer(rates=mock_rates)
+    with pytest.raises(ValueError, match="Token counts cannot be negative"):
+        pricer.estimate_request_cost("gpt-4", -10)
 
 
 def test_estimate_request_cost_negative_output_override(mock_rates: Dict[str, ModelRate]) -> None:
