@@ -44,6 +44,8 @@ class BudgetAuthority:
             input_tokens=len(request.prompt) // 4,
             output_tokens=request.estimated_output_tokens,
             tool_calls=request.tool_calls,
+            agent_count=request.agent_count,
+            rounds=request.rounds,
         )
 
         max_budget = request.max_budget
