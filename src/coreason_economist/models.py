@@ -57,3 +57,32 @@ class EconomicTrace(BaseModel):
     voc_score: Optional[float] = Field(None, description="Value of Computation score", ge=0.0, le=1.0)
     model_used: str = Field(..., description="The model actually used")
     reason: Optional[str] = Field(None, description="Reason for the decision (e.g., 'BudgetExhausted')")
+
+
+class VOCDecision(str, Enum):
+    """Decision made by the VOC Engine."""
+
+    CONTINUE = "CONTINUE"
+    STOP = "STOP"
+
+
+class ReasoningTrace(BaseModel):
+    """
+    Represents a chronological sequence of reasoning steps or outputs.
+    Used by the VOC Engine to detect diminishing returns.
+    """
+
+    steps: List[str] = Field(..., description="List of text outputs from previous reasoning steps")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Optional context about the trace")
+
+
+class VOCResult(BaseModel):
+    """
+    Result of a Value of Computation evaluation.
+    """
+
+    decision: VOCDecision = Field(..., description="Recommendation to stop or continue")
+    score: float = Field(..., description="Calculated similarity or utility score (0.0 to 1.0)", ge=0.0, le=1.0)
+    reason: str = Field(..., description="Explanation for the decision")
+
+    model_config = ConfigDict(frozen=True)
