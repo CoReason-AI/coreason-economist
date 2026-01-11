@@ -62,6 +62,9 @@ class RequestPayload(BaseModel):
     )
     agent_count: int = Field(1, description="Number of agents participating", ge=1)
     rounds: int = Field(1, description="Number of rounds of execution", ge=1)
+    quality_warning: Optional[str] = Field(
+        None, description="Warning if the request was downgraded or modified to fit budget"
+    )
 
 
 class EconomicTrace(BaseModel):
