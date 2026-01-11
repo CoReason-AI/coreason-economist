@@ -86,6 +86,7 @@ def test_latency_driven_downgrade() -> None:
     suggestion = trace.suggested_alternative
     assert suggestion is not None
     assert suggestion.model_name == "gpt-4o-mini"
+    assert suggestion.quality_warning is not None
     assert "Downgraded" in suggestion.quality_warning
 
 
