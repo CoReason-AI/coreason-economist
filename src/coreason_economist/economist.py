@@ -10,6 +10,7 @@
 
 from typing import Optional
 
+from coreason_economist.arbitrageur import Arbitrageur
 from coreason_economist.budget_authority import BudgetAuthority
 from coreason_economist.exceptions import BudgetExhaustedError
 from coreason_economist.models import Decision, EconomicTrace, RequestPayload
@@ -27,6 +28,7 @@ class Economist:
         self,
         pricer: Optional[Pricer] = None,
         budget_authority: Optional[BudgetAuthority] = None,
+        arbitrageur: Optional[Arbitrageur] = None,
     ) -> None:
         """
         Initialize the Economist.
@@ -34,11 +36,13 @@ class Economist:
         Args:
             pricer: Instance of Pricer. If None, creates a default one.
             budget_authority: Instance of BudgetAuthority. If None, creates a default one.
+            arbitrageur: Instance of Arbitrageur. If None, creates a default one.
         """
         self.pricer = pricer if pricer is not None else Pricer()
         self.budget_authority = (
             budget_authority if budget_authority is not None else BudgetAuthority(pricer=self.pricer)
         )
+        self.arbitrageur = arbitrageur if arbitrageur is not None else Arbitrageur()
 
     def check_execution(self, request: RequestPayload) -> EconomicTrace:
         """
@@ -74,9 +78,12 @@ class Economist:
 
         except BudgetExhaustedError as e:
             # 3. Handle Rejection
+            suggestion = self.arbitrageur.recommend_alternative(request)
+
             return EconomicTrace(
                 estimated_cost=estimated_cost,
                 decision=Decision.REJECTED,
                 model_used=request.model_name,
                 reason=str(e),
+                suggested_alternative=suggestion,
             )
