@@ -75,6 +75,9 @@ class EconomicTrace(BaseModel):
     voc_score: Optional[float] = Field(None, description="Value of Computation score", ge=0.0, le=1.0)
     model_used: str = Field(..., description="The model actually used")
     reason: Optional[str] = Field(None, description="Reason for the decision (e.g., 'BudgetExhausted')")
+    suggested_alternative: Optional[RequestPayload] = Field(
+        None, description="Alternative configuration suggested by Arbitrageur"
+    )
 
 
 class VOCDecision(str, Enum):
