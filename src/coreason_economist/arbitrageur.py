@@ -8,7 +8,7 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_economist
 
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from coreason_economist.models import RequestPayload
 from coreason_economist.rates import DEFAULT_MODEL_RATES, ModelRate
@@ -66,10 +66,25 @@ class Arbitrageur:
         cheapest_name, cheapest_rate = sorted_models[0]
         cheapest_cost_index = cheapest_rate.input_cost_per_1k + cheapest_rate.output_cost_per_1k
 
+        # Logic for recommendation:
+        # 1. Check if topology reduction is possible (high impact).
+        # 2. Check if model downgrade is possible (medium impact).
+        # We apply both if applicable.
+
+        updates: Dict[str, Any] = {}
+
+        # 1. Topology Reduction
+        # If task is easy but user requested multi-agent or multi-round, assume it's overkill.
+        if request.agent_count > 1 or request.rounds > 1:
+            updates["agent_count"] = 1
+            updates["rounds"] = 1
+
+        # 2. Model Downgrade
         # If the cheapest model is significantly cheaper than current, recommend it.
-        # "Significantly" here just means strictly less expensive.
         if cheapest_cost_index < current_cost_index:
-            # Create a new payload with the updated model name
-            return request.model_copy(update={"model_name": cheapest_name})
+            updates["model_name"] = cheapest_name
+
+        if updates:
+            return request.model_copy(update=updates)
 
         return None
