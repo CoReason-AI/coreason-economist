@@ -34,6 +34,19 @@ class Budget(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class BudgetVariance(BaseModel):
+    """
+    Represents the difference between two budgets (Actual - Estimated).
+    Values can be negative (under budget).
+    """
+
+    financial_delta: float = Field(..., description="Actual - Estimated financial cost")
+    latency_ms_delta: float = Field(..., description="Actual - Estimated latency")
+    token_volume_delta: int = Field(..., description="Actual - Estimated token volume")
+
+    model_config = ConfigDict(frozen=True)
+
+
 class RequestPayload(BaseModel):
     """
     Payload for requesting execution permission or pricing.
@@ -44,6 +57,11 @@ class RequestPayload(BaseModel):
     estimated_output_tokens: Optional[int] = Field(None, description="Estimated number of output tokens", ge=0)
     tool_calls: Optional[List[Dict[str, Any]]] = Field(None, description="List of tool calls if any")
     max_budget: Optional[Budget] = Field(None, description="Maximum budget for this specific request")
+    difficulty_score: Optional[float] = Field(
+        None, description="Caller-provided difficulty score (0.0 to 1.0)", ge=0.0, le=1.0
+    )
+    agent_count: int = Field(1, description="Number of agents participating", ge=1)
+    rounds: int = Field(1, description="Number of rounds of execution", ge=1)
 
 
 class EconomicTrace(BaseModel):
