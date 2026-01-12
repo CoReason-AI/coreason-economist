@@ -19,9 +19,12 @@ from coreason_economist.models import (
     CalibrationResult,
     Decision,
     EconomicTrace,
+    ReasoningTrace,
     RequestPayload,
+    VOCResult,
 )
 from coreason_economist.pricer import Pricer
+from coreason_economist.voc import VOCEngine
 
 
 class Economist:
@@ -36,6 +39,7 @@ class Economist:
         pricer: Optional[Pricer] = None,
         budget_authority: Optional[BudgetAuthority] = None,
         arbitrageur: Optional[Arbitrageur] = None,
+        voc_engine: Optional[VOCEngine] = None,
     ) -> None:
         """
         Initialize the Economist.
@@ -44,12 +48,14 @@ class Economist:
             pricer: Instance of Pricer. If None, creates a default one.
             budget_authority: Instance of BudgetAuthority. If None, creates a default one.
             arbitrageur: Instance of Arbitrageur. If None, creates a default one.
+            voc_engine: Instance of VOCEngine. If None, creates a default one.
         """
         self.pricer = pricer if pricer is not None else Pricer()
         self.budget_authority = (
             budget_authority if budget_authority is not None else BudgetAuthority(pricer=self.pricer)
         )
         self.arbitrageur = arbitrageur if arbitrageur is not None else Arbitrageur()
+        self.voc_engine = voc_engine if voc_engine is not None else VOCEngine()
 
     def check_execution(self, request: RequestPayload) -> EconomicTrace:
         """
@@ -135,4 +141,28 @@ class Economist:
             variance=variance,
             observed_multiplier=observed_multiplier,
             recommended_multiplier=observed_multiplier,
+        )
+
+    def should_continue(
+        self,
+        trace: ReasoningTrace,
+        threshold: Optional[float] = None,
+        remaining_budget: Optional[Budget] = None,
+        total_budget: Optional[Budget] = None,
+    ) -> VOCResult:
+        """
+        Delegates to the VOC Engine to decide whether to continue computation.
+        Uses Value of Computation logic to detect diminishing returns or opportunity costs.
+
+        Args:
+            trace: The history of reasoning steps.
+            threshold: Optional override for the similarity threshold.
+            remaining_budget: The remaining budget for the request (for opportunity cost).
+            total_budget: The total allocated budget for the request.
+
+        Returns:
+            VOCResult with decision (STOP/CONTINUE) and reason.
+        """
+        return self.voc_engine.evaluate(
+            trace=trace, threshold=threshold, remaining_budget=remaining_budget, total_budget=total_budget
         )
