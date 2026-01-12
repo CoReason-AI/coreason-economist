@@ -11,7 +11,7 @@
 import difflib
 from typing import Optional
 
-from coreason_economist.models import ReasoningTrace, VOCDecision, VOCResult
+from coreason_economist.models import Budget, ReasoningTrace, VOCDecision, VOCResult
 
 
 class VOCEngine:
@@ -48,7 +48,34 @@ class VOCEngine:
 
         return difflib.SequenceMatcher(None, text_a, text_b).ratio()
 
-    def evaluate(self, trace: ReasoningTrace, threshold: Optional[float] = None) -> VOCResult:
+    def _is_budget_critical(self, remaining: Budget, total: Budget, critical_threshold: float = 0.2) -> bool:
+        """
+        Checks if any budget dimension is critically low (below the threshold percentage).
+        """
+        # Financial
+        if total.financial > 0:
+            if remaining.financial / total.financial < critical_threshold:
+                return True
+
+        # Latency
+        if total.latency_ms > 0:
+            if remaining.latency_ms / total.latency_ms < critical_threshold:
+                return True
+
+        # Token Volume
+        if total.token_volume > 0:
+            if remaining.token_volume / total.token_volume < critical_threshold:
+                return True
+
+        return False
+
+    def evaluate(
+        self,
+        trace: ReasoningTrace,
+        threshold: Optional[float] = None,
+        remaining_budget: Optional[Budget] = None,
+        total_budget: Optional[Budget] = None,
+    ) -> VOCResult:
         """
         Evaluates the reasoning trace to decide whether to continue computation.
 
@@ -57,14 +84,32 @@ class VOCEngine:
         - Compare the last step (N) with the previous step (N-1).
         - If similarity > threshold, we STOP (Diminishing returns).
 
+        Opportunity Cost Logic:
+        - If remaining_budget is critically low (< 20% of total_budget), we effectively
+          increase the "cost" of continuing by lowering the similarity threshold.
+          This makes the system "impatient" and more likely to STOP to save resources.
+
         Args:
             trace: The history of reasoning steps.
             threshold: Optional override for the similarity threshold.
+            remaining_budget: The remaining budget for the request.
+            total_budget: The total allocated budget for the request.
 
         Returns:
             VOCResult with decision, score, and reason.
         """
-        thresh = threshold if threshold is not None else self.default_threshold
+        base_thresh = threshold if threshold is not None else self.default_threshold
+        effective_thresh = base_thresh
+        opportunity_cost_active = False
+
+        # Check Opportunity Cost (Budget Constraint)
+        if remaining_budget is not None and total_budget is not None:
+            if self._is_budget_critical(remaining_budget, total_budget):
+                # Reduce threshold by 10% (e.g., 0.95 -> 0.855)
+                # This means we accept "less similarity" (more difference) as "good enough" to stop.
+                # Or rather: we stop even if they are only 85% similar, because we can't afford to refine further.
+                effective_thresh = base_thresh * 0.9
+                opportunity_cost_active = True
 
         if len(trace.steps) < 2:
             return VOCResult(
@@ -78,15 +123,18 @@ class VOCEngine:
 
         similarity = self._calculate_similarity(prev_step, last_step)
 
-        if similarity >= thresh:
+        if similarity >= effective_thresh:
+            reason = f"Diminishing returns detected. Similarity {similarity:.4f} >= threshold {effective_thresh:.4f}."
+            if opportunity_cost_active:
+                reason += " (Threshold lowered due to critical budget - Opportunity Cost)."
             return VOCResult(
                 decision=VOCDecision.STOP,
                 score=similarity,
-                reason=f"Diminishing returns detected. Similarity {similarity:.4f} >= threshold {thresh:.4f}.",
+                reason=reason,
             )
 
         return VOCResult(
             decision=VOCDecision.CONTINUE,
             score=similarity,
-            reason=f"Significant change detected. Similarity {similarity:.4f} < threshold {thresh:.4f}.",
+            reason=f"Significant change detected. Similarity {similarity:.4f} < threshold {effective_thresh:.4f}.",
         )
