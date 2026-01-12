@@ -74,15 +74,17 @@ class Economist:
 
         try:
             # 2. Check Budget
-            self.budget_authority.allow_execution(request)
+            auth_result = self.budget_authority.allow_execution(request)
 
             # If no exception, it's approved
             return EconomicTrace(
                 estimated_cost=estimated_cost,
                 decision=Decision.APPROVED,
                 model_used=request.model_name,
-                reason="Budget check passed.",
+                reason="Budget check passed." if not auth_result.warning else "Approved with warnings.",
                 input_tokens=input_tokens_est,
+                budget_warning=auth_result.warning,
+                warning_message=auth_result.message,
             )
 
         except BudgetExhaustedError as e:

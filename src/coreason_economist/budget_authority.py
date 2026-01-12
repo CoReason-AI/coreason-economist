@@ -8,10 +8,10 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_economist
 
-from typing import Optional
+from typing import List, Optional
 
 from coreason_economist.exceptions import BudgetExhaustedError
-from coreason_economist.models import RequestPayload
+from coreason_economist.models import AuthResult, RequestPayload
 from coreason_economist.pricer import Pricer
 
 
@@ -27,18 +27,17 @@ class BudgetAuthority:
         """
         self.pricer = pricer if pricer is not None else Pricer()
 
-    def allow_execution(self, request: RequestPayload) -> bool:
+    def allow_execution(self, request: RequestPayload) -> AuthResult:
         """
         Determines if the request is within the budget limits.
         Raises BudgetExhaustedError if limits are exceeded.
-        Returns True if authorized.
+        Returns AuthResult with allowed=True and potential warnings.
         """
         # If no budget constraints are defined, we allow execution (unlimited)
         if request.max_budget is None:
-            return True
+            return AuthResult(allowed=True, warning=False, message=None)
 
         # Estimate the cost of the request
-        # We estimate input tokens using char/4 heuristic as Pricer requires integer inputs
         estimated_cost = self.pricer.estimate_request_cost(
             model_name=request.model_name,
             input_tokens=len(request.prompt) // 4,
@@ -49,42 +48,40 @@ class BudgetAuthority:
         )
 
         max_budget = request.max_budget
+        warnings: List[str] = []
+
+        # Helper to check limits and generate warnings
+        def check_limit(est_val: float, limit_val: float, name: str, unit: str = "") -> None:
+            # 1. Check Hard Limit (Strict: limit=0 implies nothing allowed if cost > 0)
+            if est_val > limit_val:
+                raise BudgetExhaustedError(
+                    message=(f"{name} budget exceeded: " f"estimated {est_val}{unit} > limit {limit_val}{unit}"),
+                    limit_type=name.lower(),
+                    limit_value=limit_val,
+                    estimated_value=est_val,
+                )
+
+            # 2. Check Soft Limit Warning (Only if limit > 0)
+            if limit_val > 0:
+                ratio = est_val / limit_val
+                if ratio > request.soft_limit_threshold:
+                    pct = ratio * 100
+                    warnings.append(f"{name} budget at {pct:.1f}% ({est_val}{unit}/{limit_val}{unit})")
 
         # Check Financial Budget
-        # We treat 0 as "no budget allocated", so if max is 0 and cost > 0, it fails.
-        if estimated_cost.financial > max_budget.financial:
-            raise BudgetExhaustedError(
-                message=(
-                    f"Financial budget exceeded: "
-                    f"estimated ${estimated_cost.financial:.4f} > limit ${max_budget.financial:.4f}"
-                ),
-                limit_type="financial",
-                limit_value=max_budget.financial,
-                estimated_value=estimated_cost.financial,
-            )
+        check_limit(estimated_cost.financial, max_budget.financial, "Financial", "$")
 
         # Check Latency Budget
-        if estimated_cost.latency_ms > max_budget.latency_ms:
-            raise BudgetExhaustedError(
-                message=(
-                    f"Latency budget exceeded: "
-                    f"estimated {estimated_cost.latency_ms:.1f}ms > limit {max_budget.latency_ms:.1f}ms"
-                ),
-                limit_type="latency_ms",
-                limit_value=max_budget.latency_ms,
-                estimated_value=estimated_cost.latency_ms,
-            )
+        check_limit(estimated_cost.latency_ms, max_budget.latency_ms, "Latency", "ms")
 
         # Check Token Volume Budget
-        if estimated_cost.token_volume > max_budget.token_volume:
-            raise BudgetExhaustedError(
-                message=(
-                    f"Token volume budget exceeded: "
-                    f"estimated {estimated_cost.token_volume} > limit {max_budget.token_volume}"
-                ),
-                limit_type="token_volume",
-                limit_value=float(max_budget.token_volume),
-                estimated_value=float(estimated_cost.token_volume),
+        check_limit(float(estimated_cost.token_volume), float(max_budget.token_volume), "Token volume")
+
+        if warnings:
+            return AuthResult(
+                allowed=True,
+                warning=True,
+                message="; ".join(warnings),
             )
 
-        return True
+        return AuthResult(allowed=True, warning=False, message=None)
