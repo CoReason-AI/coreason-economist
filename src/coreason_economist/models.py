@@ -88,6 +88,37 @@ class EconomicTrace(BaseModel):
     budget_warning: bool = Field(False, description="True if budget soft limit was exceeded")
     warning_message: Optional[str] = Field(None, description="Details of soft limit warning")
 
+    def compute_efficiency_metrics(self) -> Dict[str, float]:
+        """
+        Calculates efficiency metrics for the transaction.
+        Prioritizes actual_cost if available, otherwise falls back to estimated_cost.
+
+        Returns:
+            Dictionary containing:
+            - tokens_per_dollar: Total Tokens / Financial Cost
+            - tokens_per_second: Total Tokens / (Latency ms / 1000)
+        """
+        cost = self.actual_cost if self.actual_cost else self.estimated_cost
+
+        # Financial Efficiency (Tokens per Dollar)
+        if cost.financial > 0:
+            tokens_per_dollar = float(cost.token_volume) / cost.financial
+        else:
+            tokens_per_dollar = 0.0
+
+        # Latency Efficiency (Tokens per Second)
+        # Latency is in ms, so we convert to seconds: ms / 1000.0
+        if cost.latency_ms > 0:
+            seconds = cost.latency_ms / 1000.0
+            tokens_per_second = float(cost.token_volume) / seconds
+        else:
+            tokens_per_second = 0.0
+
+        return {
+            "tokens_per_dollar": tokens_per_dollar,
+            "tokens_per_second": tokens_per_second,
+        }
+
 
 class AuthResult(BaseModel):
     """
