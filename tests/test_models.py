@@ -58,7 +58,9 @@ def test_economic_trace_creation() -> None:
         estimated_cost=budget,
         decision=Decision.APPROVED,
         model_used="gpt-4o",
+        input_tokens=100,
     )
     assert trace.estimated_cost == budget
     assert trace.decision == Decision.APPROVED
     assert trace.model_used == "gpt-4o"
+    assert trace.input_tokens == 100
