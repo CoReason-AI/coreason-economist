@@ -81,6 +81,19 @@ class EconomicTrace(BaseModel):
     suggested_alternative: Optional[RequestPayload] = Field(
         None, description="Alternative configuration suggested by Arbitrageur"
     )
+    input_tokens: int = Field(..., description="Number of input tokens used for estimation", ge=0)
+
+
+class CalibrationResult(BaseModel):
+    """
+    Result of the reconciliation process, including budget variance and heuristic updates.
+    """
+
+    variance: BudgetVariance = Field(..., description="Difference between actual and estimated budget")
+    observed_multiplier: float = Field(..., description="Actual output/input ratio observed", ge=0.0)
+    recommended_multiplier: float = Field(..., description="Recommended value for heuristic multiplier", ge=0.0)
+
+    model_config = ConfigDict(frozen=True)
 
 
 class VOCDecision(str, Enum):
