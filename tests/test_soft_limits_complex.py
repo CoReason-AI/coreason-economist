@@ -8,6 +8,7 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_economist
 
+from typing import Any, Dict
 from unittest.mock import MagicMock
 
 import pytest
@@ -31,17 +32,13 @@ def test_soft_limit_threshold_zero(authority: BudgetAuthority, mock_pricer: Magi
     Edge Case: Threshold = 0.0.
     Any usage > 0 should trigger a warning.
     """
-    mock_pricer.estimate_request_cost.return_value = Budget(
-        financial=0.01,
-        latency_ms=10.0,
-        token_volume=10
-    )
+    mock_pricer.estimate_request_cost.return_value = Budget(financial=0.01, latency_ms=10.0, token_volume=10)
 
     request = RequestPayload(
         model_name="mock-model",
         prompt="test",
         max_budget=Budget(financial=100.0, latency_ms=1000.0, token_volume=1000),
-        soft_limit_threshold=0.0
+        soft_limit_threshold=0.0,
     )
 
     result = authority.allow_execution(request)
@@ -59,17 +56,13 @@ def test_soft_limit_threshold_one(authority: BudgetAuthority, mock_pricer: Magic
     So warnings are effectively disabled for allowed requests.
     """
     # 99.9% usage
-    mock_pricer.estimate_request_cost.return_value = Budget(
-        financial=0.999,
-        latency_ms=10.0,
-        token_volume=10
-    )
+    mock_pricer.estimate_request_cost.return_value = Budget(financial=0.999, latency_ms=10.0, token_volume=10)
 
     request = RequestPayload(
         model_name="mock-model",
         prompt="test",
         max_budget=Budget(financial=1.0, latency_ms=1000.0, token_volume=1000),
-        soft_limit_threshold=1.0
+        soft_limit_threshold=1.0,
     )
 
     result = authority.allow_execution(request)
@@ -86,16 +79,16 @@ def test_soft_limit_mixed_currencies(authority: BudgetAuthority, mock_pricer: Ma
     - Token: 85% (Warn)
     """
     mock_pricer.estimate_request_cost.return_value = Budget(
-        financial=0.9,      # 90% of 1.0
-        latency_ms=200.0,   # 20% of 1000
-        token_volume=850    # 85% of 1000
+        financial=0.9,  # 90% of 1.0
+        latency_ms=200.0,  # 20% of 1000
+        token_volume=850,  # 85% of 1000
     )
 
     request = RequestPayload(
         model_name="mock-model",
         prompt="test",
         max_budget=Budget(financial=1.0, latency_ms=1000.0, token_volume=1000),
-        soft_limit_threshold=0.8
+        soft_limit_threshold=0.8,
     )
 
     result = authority.allow_execution(request)
@@ -113,14 +106,19 @@ def test_soft_limit_multi_agent_scaling(authority: BudgetAuthority, mock_pricer:
     Complex Scenario: Multi-Agent Scaling.
     Verify that increasing agent count pushes the request into warning territory.
     """
+
     # Setup mock to return cost * agent_count (simulating pricer logic roughly)
-    def side_effect(model_name, input_tokens, output_tokens, tool_calls, agent_count, rounds):
+    def side_effect(
+        model_name: str,
+        input_tokens: int,
+        output_tokens: int,
+        tool_calls: list[Dict[str, Any]],
+        agent_count: int,
+        rounds: int,
+    ) -> Budget:
         # Base cost $0.02 per agent
-        return Budget(
-            financial=0.02 * agent_count,
-            latency_ms=100.0,
-            token_volume=100
-        )
+        return Budget(financial=0.02 * agent_count, latency_ms=100.0, token_volume=100)
+
     mock_pricer.estimate_request_cost.side_effect = side_effect
 
     # Budget $0.10. Threshold 0.8 ($0.08).
@@ -131,7 +129,7 @@ def test_soft_limit_multi_agent_scaling(authority: BudgetAuthority, mock_pricer:
         prompt="test",
         agent_count=3,
         max_budget=Budget(financial=0.10, latency_ms=1000.0, token_volume=1000),
-        soft_limit_threshold=0.8
+        soft_limit_threshold=0.8,
     )
     res_3 = authority.allow_execution(req_3)
     assert res_3.allowed is True
@@ -143,7 +141,7 @@ def test_soft_limit_multi_agent_scaling(authority: BudgetAuthority, mock_pricer:
         prompt="test",
         agent_count=5,
         max_budget=Budget(financial=0.10, latency_ms=1000.0, token_volume=1000),
-        soft_limit_threshold=0.8
+        soft_limit_threshold=0.8,
     )
     res_5 = authority.allow_execution(req_5)
     assert res_5.allowed is True

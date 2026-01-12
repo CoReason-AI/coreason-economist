@@ -10,7 +10,6 @@
 
 from unittest.mock import MagicMock
 
-import pytest
 from coreason_economist.budget_authority import BudgetAuthority
 from coreason_economist.economist import Economist
 from coreason_economist.models import Budget, RequestPayload
@@ -30,11 +29,7 @@ def test_soft_limit_warning_scenario_90_percent_usage() -> None:
     """
     # 1. Setup Pricer Mock to return exactly $0.09 cost
     mock_pricer = MagicMock(spec=Pricer)
-    mock_pricer.estimate_request_cost.return_value = Budget(
-        financial=0.09,
-        latency_ms=100.0,
-        token_volume=100
-    )
+    mock_pricer.estimate_request_cost.return_value = Budget(financial=0.09, latency_ms=100.0, token_volume=100)
 
     # 2. Setup BudgetAuthority
     authority = BudgetAuthority(pricer=mock_pricer)
@@ -45,10 +40,10 @@ def test_soft_limit_warning_scenario_90_percent_usage() -> None:
         prompt="test prompt",
         max_budget=Budget(
             financial=0.10,
-            latency_ms=10000.0, # Plenty of latency budget
-            token_volume=10000  # Plenty of token budget
+            latency_ms=10000.0,  # Plenty of latency budget
+            token_volume=10000,  # Plenty of token budget
         ),
-        soft_limit_threshold=0.8
+        soft_limit_threshold=0.8,
     )
 
     # 4. Execute
@@ -57,8 +52,9 @@ def test_soft_limit_warning_scenario_90_percent_usage() -> None:
     # 5. Verify
     assert result.allowed is True, "Request should be allowed as it is within budget ($0.09 < $0.10)"
     assert result.warning is True, "Warning should be triggered as usage (90%) > threshold (80%)"
-    assert "Financial budget at 90.0%" in str(result.message), \
-        f"Warning message should accurately report usage. Got: {result.message}"
+    assert "Financial budget at 90.0%" in str(
+        result.message
+    ), f"Warning message should accurately report usage. Got: {result.message}"
 
 
 def test_soft_limit_boundary_80_percent_usage() -> None:
@@ -72,23 +68,15 @@ def test_soft_limit_boundary_80_percent_usage() -> None:
     - Expectation: Allowed=True, Warning=False
     """
     mock_pricer = MagicMock(spec=Pricer)
-    mock_pricer.estimate_request_cost.return_value = Budget(
-        financial=0.08,
-        latency_ms=100.0,
-        token_volume=100
-    )
+    mock_pricer.estimate_request_cost.return_value = Budget(financial=0.08, latency_ms=100.0, token_volume=100)
 
     authority = BudgetAuthority(pricer=mock_pricer)
 
     request = RequestPayload(
         model_name="mock-model",
         prompt="test prompt",
-        max_budget=Budget(
-            financial=0.10,
-            latency_ms=10000.0,
-            token_volume=10000
-        ),
-        soft_limit_threshold=0.8
+        max_budget=Budget(financial=0.10, latency_ms=10000.0, token_volume=10000),
+        soft_limit_threshold=0.8,
     )
 
     result = authority.allow_execution(request)
@@ -108,23 +96,15 @@ def test_soft_limit_just_above_threshold() -> None:
     - Expectation: Allowed=True, Warning=True
     """
     mock_pricer = MagicMock(spec=Pricer)
-    mock_pricer.estimate_request_cost.return_value = Budget(
-        financial=0.08001,
-        latency_ms=100.0,
-        token_volume=100
-    )
+    mock_pricer.estimate_request_cost.return_value = Budget(financial=0.08001, latency_ms=100.0, token_volume=100)
 
     authority = BudgetAuthority(pricer=mock_pricer)
 
     request = RequestPayload(
         model_name="mock-model",
         prompt="test prompt",
-        max_budget=Budget(
-            financial=0.10,
-            latency_ms=10000.0,
-            token_volume=10000
-        ),
-        soft_limit_threshold=0.8
+        max_budget=Budget(financial=0.10, latency_ms=10000.0, token_volume=10000),
+        soft_limit_threshold=0.8,
     )
 
     result = authority.allow_execution(request)
@@ -139,11 +119,7 @@ def test_economist_soft_limit_trace_mapping() -> None:
     This ensures that the `budget_warning` and `warning_message` fields are populated correctly.
     """
     mock_pricer = MagicMock(spec=Pricer)
-    mock_pricer.estimate_request_cost.return_value = Budget(
-        financial=0.09,
-        latency_ms=100.0,
-        token_volume=100
-    )
+    mock_pricer.estimate_request_cost.return_value = Budget(financial=0.09, latency_ms=100.0, token_volume=100)
 
     # Economist uses its own internal components if not provided, but we can inject them.
     # However, Economist.__init__ takes optional components.
@@ -153,12 +129,8 @@ def test_economist_soft_limit_trace_mapping() -> None:
     request = RequestPayload(
         model_name="mock-model",
         prompt="test prompt",
-        max_budget=Budget(
-            financial=0.10,
-            latency_ms=10000.0,
-            token_volume=10000
-        ),
-        soft_limit_threshold=0.8
+        max_budget=Budget(financial=0.10, latency_ms=10000.0, token_volume=10000),
+        soft_limit_threshold=0.8,
     )
 
     trace = economist.check_execution(request)
