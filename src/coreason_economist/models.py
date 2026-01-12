@@ -65,6 +65,9 @@ class RequestPayload(BaseModel):
     quality_warning: Optional[str] = Field(
         None, description="Warning if the request was downgraded or modified to fit budget"
     )
+    soft_limit_threshold: float = Field(
+        0.8, description="Usage threshold (0.0 to 1.0) to trigger a warning", ge=0.0, le=1.0
+    )
 
 
 class EconomicTrace(BaseModel):
@@ -82,6 +85,20 @@ class EconomicTrace(BaseModel):
         None, description="Alternative configuration suggested by Arbitrageur"
     )
     input_tokens: int = Field(..., description="Number of input tokens used for estimation", ge=0)
+    budget_warning: bool = Field(False, description="True if budget soft limit was exceeded")
+    warning_message: Optional[str] = Field(None, description="Details of soft limit warning")
+
+
+class AuthResult(BaseModel):
+    """
+    Result returned by the Budget Authority.
+    """
+
+    allowed: bool = Field(..., description="Whether the request is allowed")
+    warning: bool = Field(False, description="Whether a soft limit warning was triggered")
+    message: Optional[str] = Field(None, description="Warning or error message")
+
+    model_config = ConfigDict(frozen=True)
 
 
 class CalibrationResult(BaseModel):

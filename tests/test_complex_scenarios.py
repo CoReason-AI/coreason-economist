@@ -164,7 +164,7 @@ def test_integrated_expensive_council_rejection(mock_rates: Dict[str, ModelRate]
         agent_count=1,
         rounds=1,
     )
-    assert authority.allow_execution(req_single) is True
+    assert authority.allow_execution(req_single).allowed is True
 
     # Council Request (5 agents) -> $3.0 * 5 = $15.0 > $10.0 -> Should Fail
     req_council = RequestPayload(
