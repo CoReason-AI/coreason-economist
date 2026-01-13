@@ -64,3 +64,83 @@ def test_economic_trace_creation() -> None:
     assert trace.decision == Decision.APPROVED
     assert trace.model_used == "gpt-4o"
     assert trace.input_tokens == 100
+
+
+def test_economic_trace_computed_fields() -> None:
+    """Test that computed fields are calculated correctly and serialized."""
+    # Scenario 1: Basic case with actual cost
+    actual_budget = Budget(financial=1.0, latency_ms=2000.0, token_volume=1000)
+    trace = EconomicTrace(
+        estimated_cost=Budget(financial=0.5),  # Different estimate
+        actual_cost=actual_budget,
+        decision=Decision.APPROVED,
+        model_used="gpt-4o",
+        input_tokens=100,
+    )
+
+    # tokens_per_dollar = 1000 / 1.0 = 1000.0
+    assert trace.tokens_per_dollar == 1000.0
+
+    # tokens_per_second = 1000 / (2000ms / 1000) = 1000 / 2.0 = 500.0
+    assert trace.tokens_per_second == 500.0
+
+    # latency_per_token = 2000ms / 1000 = 2.0 ms/token
+    assert trace.latency_per_token == 2.0
+
+    # Check serialization
+    trace_json = trace.model_dump(mode="json")
+    assert "tokens_per_dollar" in trace_json
+    assert "tokens_per_second" in trace_json
+    assert "latency_per_token" in trace_json
+    assert trace_json["tokens_per_dollar"] == 1000.0
+    assert trace_json["tokens_per_second"] == 500.0
+    assert trace_json["latency_per_token"] == 2.0
+
+
+def test_economic_trace_computed_fields_fallback() -> None:
+    """Test that computed fields fall back to estimated cost if actual is None."""
+    est_budget = Budget(financial=2.0, latency_ms=4000.0, token_volume=2000)
+    trace = EconomicTrace(
+        estimated_cost=est_budget,
+        actual_cost=None,
+        decision=Decision.APPROVED,
+        model_used="gpt-4o",
+        input_tokens=100,
+    )
+
+    # tokens_per_dollar = 2000 / 2.0 = 1000.0
+    assert trace.tokens_per_dollar == 1000.0
+
+    # tokens_per_second = 2000 / 4.0 = 500.0
+    assert trace.tokens_per_second == 500.0
+
+    # latency_per_token = 4000 / 2000 = 2.0
+    assert trace.latency_per_token == 2.0
+
+
+def test_economic_trace_computed_fields_zero_values() -> None:
+    """Test division by zero handling in computed fields."""
+    zero_budget = Budget(financial=0.0, latency_ms=0.0, token_volume=0)
+    trace = EconomicTrace(
+        estimated_cost=zero_budget,
+        decision=Decision.APPROVED,
+        model_used="gpt-4o",
+        input_tokens=100,
+    )
+
+    # Should handle division by zero safely
+    assert trace.tokens_per_dollar == 0.0
+    assert trace.tokens_per_second == 0.0
+    assert trace.latency_per_token == 0.0
+
+    # Test only financial zero
+    partial_budget = Budget(financial=0.0, latency_ms=1000.0, token_volume=100)
+    trace_partial = EconomicTrace(
+        estimated_cost=partial_budget,
+        decision=Decision.APPROVED,
+        model_used="gpt-4o",
+        input_tokens=100,
+    )
+    assert trace_partial.tokens_per_dollar == 0.0
+    assert trace_partial.tokens_per_second == 100.0  # 100 / 1.0
+    assert trace_partial.latency_per_token == 10.0  # 1000 / 100

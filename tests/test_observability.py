@@ -2,7 +2,7 @@ from coreason_economist.models import Budget, Decision, EconomicTrace
 
 
 class TestEconomicTraceObservability:
-    """Test suite for EconomicTrace observability metrics."""
+    """Test suite for EconomicTrace observability metrics using computed fields."""
 
     def test_compute_efficiency_metrics_actual_cost(self) -> None:
         """Test calculation using actual cost."""
@@ -17,13 +17,14 @@ class TestEconomicTraceObservability:
             input_tokens=500,
         )
 
-        metrics = trace.compute_efficiency_metrics()
-
         # Financial: 1000 tokens / $0.05 = 20,000 tokens/$
-        assert metrics["tokens_per_dollar"] == 20000.0
+        assert trace.tokens_per_dollar == 20000.0
 
         # Latency: 1000 tokens / 0.5 sec = 2000 tokens/sec
-        assert metrics["tokens_per_second"] == 2000.0
+        assert trace.tokens_per_second == 2000.0
+
+        # Latency/Token: 500 ms / 1000 tokens = 0.5 ms/token
+        assert trace.latency_per_token == 0.5
 
     def test_compute_efficiency_metrics_fallback_estimated(self) -> None:
         """Test fallback to estimated cost when actual cost is None."""
@@ -33,13 +34,14 @@ class TestEconomicTraceObservability:
             estimated_cost=estimated, actual_cost=None, decision=Decision.APPROVED, model_used="gpt-4", input_tokens=500
         )
 
-        metrics = trace.compute_efficiency_metrics()
-
         # Financial: 1000 tokens / $0.10 = 10,000 tokens/$
-        assert metrics["tokens_per_dollar"] == 10000.0
+        assert trace.tokens_per_dollar == 10000.0
 
         # Latency: 1000 tokens / 1.0 sec = 1000 tokens/sec
-        assert metrics["tokens_per_second"] == 1000.0
+        assert trace.tokens_per_second == 1000.0
+
+        # Latency/Token: 1000 ms / 1000 tokens = 1.0 ms/token
+        assert trace.latency_per_token == 1.0
 
     def test_compute_efficiency_metrics_zero_division_safety(self) -> None:
         """Test division by zero safety."""
@@ -49,10 +51,9 @@ class TestEconomicTraceObservability:
             estimated_cost=estimated, decision=Decision.APPROVED, model_used="gpt-4", input_tokens=500
         )
 
-        metrics = trace.compute_efficiency_metrics()
-
-        assert metrics["tokens_per_dollar"] == 0.0
-        assert metrics["tokens_per_second"] == 0.0
+        assert trace.tokens_per_dollar == 0.0
+        assert trace.tokens_per_second == 0.0
+        assert trace.latency_per_token == 0.0
 
     def test_mixed_zero_non_zero(self) -> None:
         """Test independent handling of zero denominators."""
@@ -65,9 +66,9 @@ class TestEconomicTraceObservability:
             model_used="gpt-4-free",
             input_tokens=500,
         )
-        metrics_free = trace_free.compute_efficiency_metrics()
-        assert metrics_free["tokens_per_dollar"] == 0.0  # Guarded
-        assert metrics_free["tokens_per_second"] == 1000.0  # Valid
+        assert trace_free.tokens_per_dollar == 0.0  # Guarded
+        assert trace_free.tokens_per_second == 1000.0  # Valid
+        assert trace_free.latency_per_token == 1.0  # 1000 / 1000
 
         # Case 2: Cost > 0, Latency is 0 (instant)
         actual_instant = Budget(financial=1.0, latency_ms=0.0, token_volume=1000)
@@ -78,9 +79,9 @@ class TestEconomicTraceObservability:
             model_used="gpt-4-instant",
             input_tokens=500,
         )
-        metrics_instant = trace_instant.compute_efficiency_metrics()
-        assert metrics_instant["tokens_per_dollar"] == 1000.0  # Valid
-        assert metrics_instant["tokens_per_second"] == 0.0  # Guarded
+        assert trace_instant.tokens_per_dollar == 1000.0  # Valid
+        assert trace_instant.tokens_per_second == 0.0  # Guarded
+        assert trace_instant.latency_per_token == 0.0  # 0 / 1000
 
     def test_small_values_precision(self) -> None:
         """Test calculation stability with micro-values."""
@@ -93,13 +94,15 @@ class TestEconomicTraceObservability:
             model_used="micro-model",
             input_tokens=10,
         )
-        metrics = trace.compute_efficiency_metrics()
 
         # 100 / 0.0001 = 1,000,000
-        assert metrics["tokens_per_dollar"] == 1_000_000.0
+        assert trace.tokens_per_dollar == 1_000_000.0
 
         # 0.1ms = 0.0001s. 100 / 0.0001 = 1,000,000
-        assert metrics["tokens_per_second"] == 1_000_000.0
+        assert trace.tokens_per_second == 1_000_000.0
+
+        # 0.1ms / 100 = 0.001 ms/token
+        assert trace.latency_per_token == 0.001
 
     def test_strict_actual_precedence(self) -> None:
         """Verify actual_cost fully overrides estimated_cost, even if actual has zeros."""
@@ -115,11 +118,10 @@ class TestEconomicTraceObservability:
             input_tokens=500,
         )
 
-        metrics = trace.compute_efficiency_metrics()
-
         # Should use ACTUAL values (0.0), not fall back to ESTIMATED (10.0/1000.0)
-        assert metrics["tokens_per_dollar"] == 0.0
-        assert metrics["tokens_per_second"] == 0.0
+        assert trace.tokens_per_dollar == 0.0
+        assert trace.tokens_per_second == 0.0
+        assert trace.latency_per_token == 0.0
 
     def test_free_transaction_handling(self) -> None:
         """Confirm that 'infinite' efficiency (free transaction) returns safe 0.0."""
@@ -132,10 +134,9 @@ class TestEconomicTraceObservability:
             model_used="free-model",
             input_tokens=250,
         )
-        metrics = trace.compute_efficiency_metrics()
 
         # Mathematically infinite, but dashboard safe is 0.0
-        assert metrics["tokens_per_dollar"] == 0.0
+        assert trace.tokens_per_dollar == 0.0
 
     def test_compute_efficiency_metrics_zero_tokens(self) -> None:
         """Test calculation with zero tokens."""
@@ -143,7 +144,6 @@ class TestEconomicTraceObservability:
 
         trace = EconomicTrace(estimated_cost=estimated, decision=Decision.APPROVED, model_used="gpt-4", input_tokens=0)
 
-        metrics = trace.compute_efficiency_metrics()
-
-        assert metrics["tokens_per_dollar"] == 0.0
-        assert metrics["tokens_per_second"] == 0.0
+        assert trace.tokens_per_dollar == 0.0
+        assert trace.tokens_per_second == 0.0
+        assert trace.latency_per_token == 0.0
