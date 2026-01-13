@@ -1,5 +1,7 @@
 import json
+
 from coreason_economist.models import Budget, Decision, EconomicTrace
+
 
 class TestObservabilitySchema:
     """
@@ -60,10 +62,7 @@ class TestObservabilitySchema:
         # 1000ms latency, 2000 tokens -> 0.5 ms/token
         budget = Budget(financial=1.0, latency_ms=1000.0, token_volume=2000)
         trace = EconomicTrace(
-            estimated_cost=budget,
-            decision=Decision.APPROVED,
-            model_used="test-model",
-            input_tokens=1000
+            estimated_cost=budget, decision=Decision.APPROVED, model_used="test-model", input_tokens=1000
         )
 
         expected = 1000.0 / 2000.0  # 0.5
