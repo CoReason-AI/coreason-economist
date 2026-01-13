@@ -11,7 +11,7 @@
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 class Decision(str, Enum):
@@ -88,36 +88,44 @@ class EconomicTrace(BaseModel):
     budget_warning: bool = Field(False, description="True if budget soft limit was exceeded")
     warning_message: Optional[str] = Field(None, description="Details of soft limit warning")
 
-    def compute_efficiency_metrics(self) -> Dict[str, float]:
-        """
-        Calculates efficiency metrics for the transaction.
-        Prioritizes actual_cost if available, otherwise falls back to estimated_cost.
+    @property
+    def _effective_cost(self) -> Budget:
+        """Internal helper to get the cost used for metrics (Actual > Estimated)."""
+        return self.actual_cost if self.actual_cost else self.estimated_cost
 
-        Returns:
-            Dictionary containing:
-            - tokens_per_dollar: Total Tokens / Financial Cost
-            - tokens_per_second: Total Tokens / (Latency ms / 1000)
+    @computed_field  # type: ignore[misc]
+    @property
+    def tokens_per_dollar(self) -> float:
         """
-        cost = self.actual_cost if self.actual_cost else self.estimated_cost
-
-        # Financial Efficiency (Tokens per Dollar)
+        Calculates financial efficiency: Total Tokens / Financial Cost.
+        """
+        cost = self._effective_cost
         if cost.financial > 0:
-            tokens_per_dollar = float(cost.token_volume) / cost.financial
-        else:
-            tokens_per_dollar = 0.0
+            return float(cost.token_volume) / cost.financial
+        return 0.0
 
-        # Latency Efficiency (Tokens per Second)
-        # Latency is in ms, so we convert to seconds: ms / 1000.0
+    @computed_field  # type: ignore[misc]
+    @property
+    def tokens_per_second(self) -> float:
+        """
+        Calculates speed efficiency: Total Tokens / (Latency ms / 1000).
+        """
+        cost = self._effective_cost
         if cost.latency_ms > 0:
             seconds = cost.latency_ms / 1000.0
-            tokens_per_second = float(cost.token_volume) / seconds
-        else:
-            tokens_per_second = 0.0
+            return float(cost.token_volume) / seconds
+        return 0.0
 
-        return {
-            "tokens_per_dollar": tokens_per_dollar,
-            "tokens_per_second": tokens_per_second,
-        }
+    @computed_field  # type: ignore[misc]
+    @property
+    def latency_per_token(self) -> float:
+        """
+        Calculates latency per token: Latency ms / Total Tokens.
+        """
+        cost = self._effective_cost
+        if cost.token_volume > 0:
+            return cost.latency_ms / float(cost.token_volume)
+        return 0.0
 
 
 class AuthResult(BaseModel):
