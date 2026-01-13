@@ -73,6 +73,7 @@ class RequestPayload(BaseModel):
 class EconomicTrace(BaseModel):
     """
     Log object for every transaction.
+    Includes computed efficiency metrics for dashboard observability.
     """
 
     estimated_cost: Budget = Field(..., description="Estimated cost before execution")
@@ -100,9 +101,9 @@ class EconomicTrace(BaseModel):
         Calculates financial efficiency: Total Tokens / Financial Cost.
         """
         cost = self._effective_cost
-        if cost.financial > 0:
-            return float(cost.token_volume) / cost.financial
-        return 0.0
+        if cost.financial <= 0:
+            return 0.0
+        return float(cost.token_volume) / cost.financial
 
     @computed_field  # type: ignore[misc]
     @property
@@ -111,10 +112,10 @@ class EconomicTrace(BaseModel):
         Calculates speed efficiency: Total Tokens / (Latency ms / 1000).
         """
         cost = self._effective_cost
-        if cost.latency_ms > 0:
-            seconds = cost.latency_ms / 1000.0
-            return float(cost.token_volume) / seconds
-        return 0.0
+        if cost.latency_ms <= 0:
+            return 0.0
+        seconds = cost.latency_ms / 1000.0
+        return float(cost.token_volume) / seconds
 
     @computed_field  # type: ignore[misc]
     @property
@@ -123,9 +124,9 @@ class EconomicTrace(BaseModel):
         Calculates latency per token: Latency ms / Total Tokens.
         """
         cost = self._effective_cost
-        if cost.token_volume > 0:
-            return cost.latency_ms / float(cost.token_volume)
-        return 0.0
+        if cost.token_volume <= 0:
+            return 0.0
+        return cost.latency_ms / float(cost.token_volume)
 
     @computed_field  # type: ignore[misc]
     @property
