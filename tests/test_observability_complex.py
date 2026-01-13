@@ -9,6 +9,7 @@
 # Source Code: https://github.com/CoReason-AI/coreason_economist
 
 import math
+
 from coreason_economist.models import Budget, Decision, EconomicTrace
 
 
@@ -69,11 +70,7 @@ class TestEconomicTraceComplexObservability:
         Test metrics with very large values (e.g., billions of tokens) to ensure float stability.
         """
         # 1 Billion tokens, $1000 cost, 1000 seconds (1M ms)
-        large_budget = Budget(
-            financial=1000.0,
-            latency_ms=1_000_000.0,
-            token_volume=1_000_000_000
-        )
+        large_budget = Budget(financial=1000.0, latency_ms=1_000_000.0, token_volume=1_000_000_000)
         trace = EconomicTrace(
             estimated_cost=large_budget,
             actual_cost=large_budget,
@@ -98,9 +95,9 @@ class TestEconomicTraceComplexObservability:
         """
         # Very efficient but expensive request (e.g., massive batch job)
         estimated = Budget(
-            financial=100.0,         # Expensive!
-            latency_ms=1000.0,       # Fast!
-            token_volume=1_000_000   # Huge volume!
+            financial=100.0,  # Expensive!
+            latency_ms=1000.0,  # Fast!
+            token_volume=1_000_000,  # Huge volume!
         )
 
         # Rejected because $100 > limit
@@ -110,11 +107,11 @@ class TestEconomicTraceComplexObservability:
             decision=Decision.REJECTED,
             reason="BudgetExhausted",
             model_used="gpt-4",
-            input_tokens=1000
+            input_tokens=1000,
         )
 
         # Should still calculate potential efficiency
         assert trace.tokens_per_dollar == 10_000.0  # 1M / 100
-        assert trace.tokens_per_second == 1_000_000.0 # 1M / 1s
+        assert trace.tokens_per_second == 1_000_000.0  # 1M / 1s
 
         # Dashboard can read this and say "We blocked a job that was running at 1M tokens/sec"
