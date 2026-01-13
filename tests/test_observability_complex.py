@@ -56,6 +56,7 @@ class TestEconomicTraceComplexObservability:
 
         # Initially uses estimated
         assert trace.tokens_per_dollar == 1000.0  # 1000 / 1.0
+        assert trace.cost_per_insight == 1.0
 
         # Update actual cost (cheaper and faster)
         new_actual = Budget(financial=0.5, latency_ms=500.0, token_volume=1000)
@@ -64,6 +65,7 @@ class TestEconomicTraceComplexObservability:
         # Should now use actual
         assert trace.tokens_per_dollar == 2000.0  # 1000 / 0.5
         assert trace.tokens_per_second == 2000.0  # 1000 / 0.5s
+        assert trace.cost_per_insight == 0.5
 
     def test_large_scale_metrics(self) -> None:
         """
@@ -87,6 +89,9 @@ class TestEconomicTraceComplexObservability:
 
         # 1M ms / 1B tokens = 0.001 ms/token
         assert trace.latency_per_token == 0.001
+
+        # Cost per insight
+        assert trace.cost_per_insight == 1000.0
 
     def test_rejected_opportunity_metrics(self) -> None:
         """
@@ -114,4 +119,38 @@ class TestEconomicTraceComplexObservability:
         assert trace.tokens_per_dollar == 10_000.0  # 1M / 100
         assert trace.tokens_per_second == 1_000_000.0  # 1M / 1s
 
-        # Dashboard can read this and say "We blocked a job that was running at 1M tokens/sec"
+        # Cost per insight (opportunity cost)
+        assert trace.cost_per_insight == 100.0
+
+    def test_cost_per_insight_fallback_to_estimated(self) -> None:
+        """
+        Specific check that cost_per_insight correctly uses estimated cost
+        when actual_cost is None, confirming the contract for dashboards.
+        """
+        estimated = Budget(financial=0.05, latency_ms=100.0, token_volume=100)
+        trace = EconomicTrace(
+            estimated_cost=estimated,
+            actual_cost=None,
+            decision=Decision.APPROVED,
+            model_used="pending-model",
+            input_tokens=10,
+        )
+        # Should return estimated cost
+        assert trace.cost_per_insight == 0.05
+
+    def test_cost_per_insight_actual_override(self) -> None:
+        """
+        Specific check that cost_per_insight correctly uses actual cost
+        when actual_cost is present.
+        """
+        estimated = Budget(financial=0.05, latency_ms=100.0, token_volume=100)
+        actual = Budget(financial=0.03, latency_ms=50.0, token_volume=100)
+        trace = EconomicTrace(
+            estimated_cost=estimated,
+            actual_cost=actual,
+            decision=Decision.APPROVED,
+            model_used="completed-model",
+            input_tokens=10,
+        )
+        # Should return actual cost
+        assert trace.cost_per_insight == 0.03
