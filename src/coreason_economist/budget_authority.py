@@ -55,7 +55,7 @@ class BudgetAuthority:
             # 1. Check Hard Limit (Strict: limit=0 implies nothing allowed if cost > 0)
             if est_val > limit_val:
                 raise BudgetExhaustedError(
-                    message=(f"{name} budget exceeded: " f"estimated {est_val}{unit} > limit {limit_val}{unit}"),
+                    message=(f"{name} budget exceeded: estimated {est_val}{unit} > limit {limit_val}{unit}"),
                     limit_type=name.lower(),
                     limit_value=limit_val,
                     estimated_value=est_val,
