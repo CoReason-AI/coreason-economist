@@ -127,6 +127,15 @@ class EconomicTrace(BaseModel):
             return cost.latency_ms / float(cost.token_volume)
         return 0.0
 
+    @computed_field  # type: ignore[misc]
+    @property
+    def cost_per_insight(self) -> float:
+        """
+        Exposes the raw financial cost as 'Cost per Insight' for dashboarding.
+        Returns the financial cost of the transaction (Actual > Estimated).
+        """
+        return self._effective_cost.financial
+
 
 class AuthResult(BaseModel):
     """
