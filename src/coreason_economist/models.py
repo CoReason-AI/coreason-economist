@@ -94,7 +94,7 @@ class EconomicTrace(BaseModel):
         """Internal helper to get the cost used for metrics (Actual > Estimated)."""
         return self.actual_cost if self.actual_cost else self.estimated_cost
 
-    @computed_field  # type: ignore[misc]
+    @computed_field(return_type=float)  # type: ignore[misc]
     @property
     def tokens_per_dollar(self) -> float:
         """
@@ -105,7 +105,7 @@ class EconomicTrace(BaseModel):
             return 0.0
         return float(cost.token_volume) / cost.financial
 
-    @computed_field  # type: ignore[misc]
+    @computed_field(return_type=float)  # type: ignore[misc]
     @property
     def tokens_per_second(self) -> float:
         """
@@ -117,7 +117,7 @@ class EconomicTrace(BaseModel):
         seconds = cost.latency_ms / 1000.0
         return float(cost.token_volume) / seconds
 
-    @computed_field  # type: ignore[misc]
+    @computed_field(return_type=float)  # type: ignore[misc]
     @property
     def latency_per_token(self) -> float:
         """
@@ -128,7 +128,7 @@ class EconomicTrace(BaseModel):
             return 0.0
         return cost.latency_ms / float(cost.token_volume)
 
-    @computed_field  # type: ignore[misc]
+    @computed_field(return_type=float)  # type: ignore[misc]
     @property
     def cost_per_insight(self) -> float:
         """
