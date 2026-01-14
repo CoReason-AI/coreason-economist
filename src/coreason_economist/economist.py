@@ -54,7 +54,7 @@ class Economist:
         self.budget_authority = (
             budget_authority if budget_authority is not None else BudgetAuthority(pricer=self.pricer)
         )
-        self.arbitrageur = arbitrageur if arbitrageur is not None else Arbitrageur()
+        self.arbitrageur = arbitrageur if arbitrageur is not None else Arbitrageur(pricer=self.pricer)
         self.voc_engine = voc_engine if voc_engine is not None else VOCEngine()
 
     def check_execution(self, request: RequestPayload) -> EconomicTrace:

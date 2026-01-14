@@ -120,6 +120,7 @@ def test_economist_soft_limit_trace_mapping() -> None:
     """
     mock_pricer = MagicMock(spec=Pricer)
     mock_pricer.estimate_request_cost.return_value = Budget(financial=0.09, latency_ms=100.0, token_volume=100)
+    mock_pricer.rates = {}  # Mock rates to prevent AttributeError in Arbitrageur
 
     # Economist uses its own internal components if not provided, but we can inject them.
     # However, Economist.__init__ takes optional components.
