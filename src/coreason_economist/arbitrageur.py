@@ -20,7 +20,12 @@ class Arbitrageur:
     The Optimizer: Recommends cheaper alternatives based on difficulty.
     """
 
-    def __init__(self, rates: Optional[Dict[str, ModelRate]] = None, threshold: float = 0.5) -> None:
+    def __init__(
+        self,
+        rates: Optional[Dict[str, ModelRate]] = None,
+        threshold: float = 0.5,
+        pricer: Optional[Pricer] = None,
+    ) -> None:
         """
         Initialize the Arbitrageur.
 
@@ -28,10 +33,17 @@ class Arbitrageur:
             rates: Registry of model rates. Defaults to DEFAULT_MODEL_RATES.
             threshold: Difficulty score threshold below which to suggest downgrades.
                        Default is 0.5.
+            pricer: Optional Pricer instance. If provided, it overrides 'rates' and is used directly.
         """
-        self.rates = rates if rates is not None else DEFAULT_MODEL_RATES
         self.threshold = threshold
-        self.pricer = Pricer(rates=self.rates)
+
+        if pricer is not None:
+            self.pricer = pricer
+            # Sync rates from the provided Pricer
+            self.rates = pricer.rates
+        else:
+            self.rates = rates if rates is not None else DEFAULT_MODEL_RATES
+            self.pricer = Pricer(rates=self.rates)
 
     def _is_budget_exceeded(self, cost: Budget, limit: Budget) -> bool:
         """
