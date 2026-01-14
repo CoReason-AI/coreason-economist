@@ -25,9 +25,7 @@ def test_arbitrageur_pricer_precedence() -> None:
         "model-A": ModelRate(input_cost_per_1k=1.0, output_cost_per_1k=1.0, latency_ms_per_output_token=10.0)
     }
 
-    rates_used = {
-        "model-B": ModelRate(input_cost_per_1k=0.5, output_cost_per_1k=0.5, latency_ms_per_output_token=5.0)
-    }
+    rates_used = {"model-B": ModelRate(input_cost_per_1k=0.5, output_cost_per_1k=0.5, latency_ms_per_output_token=5.0)}
     pricer = Pricer(rates=rates_used)
 
     # 2. Initialize Arbitrageur
@@ -68,7 +66,7 @@ def test_dynamic_rate_updates_complex_scenario() -> None:
 
     initial_rates = {
         model_expensive: ModelRate(input_cost_per_1k=1.0, output_cost_per_1k=1.0, latency_ms_per_output_token=10.0),
-        model_cheap: ModelRate(input_cost_per_1k=0.01, output_cost_per_1k=0.01, latency_ms_per_output_token=10.0)
+        model_cheap: ModelRate(input_cost_per_1k=0.01, output_cost_per_1k=0.01, latency_ms_per_output_token=10.0),
     }
 
     pricer = Pricer(rates=initial_rates)
@@ -78,9 +76,9 @@ def test_dynamic_rate_updates_complex_scenario() -> None:
     # Should trigger arbitrage to 'model-cheap'
     request = RequestPayload(
         model_name=model_expensive,
-        prompt="A" * 400, # 100 tokens
+        prompt="A" * 400,  # 100 tokens
         estimated_output_tokens=100,
-        max_budget=Budget(financial=0.05, latency_ms=10000, token_volume=10000)
+        max_budget=Budget(financial=0.05, latency_ms=10000, token_volume=10000),
     )
 
     # 2. First Execution: Expect Rejection + Suggestion (Cheap)
