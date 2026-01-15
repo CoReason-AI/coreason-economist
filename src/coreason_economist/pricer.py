@@ -30,8 +30,8 @@ class Pricer:
         Initialize the Pricer with a rate registry and heuristic settings.
         If no rates are provided, uses the default registry.
         """
-        self.rates = rates if rates is not None else DEFAULT_MODEL_RATES
-        self.tool_rates = tool_rates if tool_rates is not None else DEFAULT_TOOL_RATES
+        self.rates = rates if rates is not None else DEFAULT_MODEL_RATES.copy()
+        self.tool_rates = tool_rates if tool_rates is not None else DEFAULT_TOOL_RATES.copy()
         self.heuristic_multiplier = heuristic_multiplier
 
     def estimate_financial_cost(self, model_name: str, input_tokens: int, output_tokens: int) -> float:

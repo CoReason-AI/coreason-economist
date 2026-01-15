@@ -39,11 +39,16 @@ class Arbitrageur:
 
         if pricer is not None:
             self.pricer = pricer
-            # Sync rates from the provided Pricer
-            self.rates = pricer.rates
         else:
-            self.rates = rates if rates is not None else DEFAULT_MODEL_RATES
-            self.pricer = Pricer(rates=self.rates)
+            self.pricer = Pricer(rates=rates if rates is not None else DEFAULT_MODEL_RATES)
+
+    @property
+    def rates(self) -> Dict[str, ModelRate]:
+        """
+        Dynamically access the rates from the Pricer to ensure we always use the
+        latest rate card (e.g. after calibration updates).
+        """
+        return self.pricer.rates
 
     def _is_budget_exceeded(self, cost: Budget, limit: Budget) -> bool:
         """
