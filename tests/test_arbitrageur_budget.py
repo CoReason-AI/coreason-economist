@@ -10,13 +10,15 @@
 
 from coreason_economist.arbitrageur import Arbitrageur
 from coreason_economist.models import Budget, RequestPayload
+from coreason_economist.pricer import Pricer
 
 
 def test_budget_fitting_high_difficulty() -> None:
     """
     Test that Arbitrageur fits budget even for high difficulty tasks.
     """
-    arbitrageur = Arbitrageur()
+    pricer = Pricer()
+    arbitrageur = Arbitrageur(pricer=pricer)
 
     # Request: High cost, high difficulty
     request = RequestPayload(
@@ -50,7 +52,8 @@ def test_budget_fitting_topology_only_high_difficulty() -> None:
     even for high difficulty, and sets appropriate warning.
     This hits the coverage gap for "Reduced to single-shot...".
     """
-    arbitrageur = Arbitrageur()
+    pricer = Pricer()
+    arbitrageur = Arbitrageur(pricer=pricer)
 
     # Request: Moderate cost, High difficulty
     # 100 in, 100 out. Per agent: ~0.002.
@@ -84,7 +87,8 @@ def test_budget_fitting_topology_no_difficulty_score() -> None:
     Test that Arbitrageur reduces topology if needed even if difficulty is unknown,
     but does NOT set the specific high-difficulty warning.
     """
-    arbitrageur = Arbitrageur()
+    pricer = Pricer()
+    arbitrageur = Arbitrageur(pricer=pricer)
 
     # Request: Moderate cost, Unknown difficulty
     # 10 agents -> 0.02. Budget -> 0.01.
@@ -115,7 +119,8 @@ def test_budget_fitting_topology_low_difficulty() -> None:
     and does NOT set warning (because low difficulty implies it's fine).
     AND it should proceed to optimize model (Strategy 2) because difficulty is low.
     """
-    arbitrageur = Arbitrageur()
+    pricer = Pricer()
+    arbitrageur = Arbitrageur(pricer=pricer)
 
     request = RequestPayload(
         model_name="gpt-4o",
@@ -146,7 +151,8 @@ def test_budget_fitting_model_downgrade_low_difficulty() -> None:
     even for low difficulty.
     This hits the coverage gap for line 149 (else block).
     """
-    arbitrageur = Arbitrageur()
+    pricer = Pricer()
+    arbitrageur = Arbitrageur(pricer=pricer)
 
     # Request: gpt-4o, 1 agent.
     # Cost: ~0.002.
@@ -175,7 +181,8 @@ def test_no_change_if_budget_ok_high_difficulty() -> None:
     """
     Test that no changes are made if budget is respected and difficulty is high.
     """
-    arbitrageur = Arbitrageur()
+    pricer = Pricer()
+    arbitrageur = Arbitrageur(pricer=pricer)
 
     request = RequestPayload(
         model_name="gpt-4o",
@@ -190,7 +197,8 @@ def test_no_change_if_budget_ok_high_difficulty() -> None:
 
 def test_quality_warning_content() -> None:
     """Test that quality warning message is descriptive."""
-    arbitrageur = Arbitrageur()
+    pricer = Pricer()
+    arbitrageur = Arbitrageur(pricer=pricer)
 
     request = RequestPayload(
         model_name="gpt-4o",
