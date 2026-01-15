@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 
 from coreason_economist.models import Budget, RequestPayload
 from coreason_economist.pricer import Pricer
-from coreason_economist.rates import DEFAULT_MODEL_RATES, ModelRate
+from coreason_economist.rates import ModelRate
 
 
 class Arbitrageur:
@@ -22,25 +22,19 @@ class Arbitrageur:
 
     def __init__(
         self,
-        rates: Optional[Dict[str, ModelRate]] = None,
-        threshold: float = 0.5,
         pricer: Optional[Pricer] = None,
+        threshold: float = 0.5,
     ) -> None:
         """
         Initialize the Arbitrageur.
 
         Args:
-            rates: Registry of model rates. Defaults to DEFAULT_MODEL_RATES.
+            pricer: Optional Pricer instance. If None, a default one is created.
             threshold: Difficulty score threshold below which to suggest downgrades.
                        Default is 0.5.
-            pricer: Optional Pricer instance. If provided, it overrides 'rates' and is used directly.
         """
         self.threshold = threshold
-
-        if pricer is not None:
-            self.pricer = pricer
-        else:
-            self.pricer = Pricer(rates=rates if rates is not None else DEFAULT_MODEL_RATES)
+        self.pricer = pricer if pricer is not None else Pricer()
 
     @property
     def rates(self) -> Dict[str, ModelRate]:
