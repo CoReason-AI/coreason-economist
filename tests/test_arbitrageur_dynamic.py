@@ -27,20 +27,15 @@ def test_arbitrageur_dynamic_price_spike() -> None:
 
     request = RequestPayload(
         model_name="gpt-4o",
-        prompt="A" * 4000, # 1000 tokens
+        prompt="A" * 4000,  # 1000 tokens
         estimated_output_tokens=1000,
-        max_budget=Budget(financial=0.03, latency_ms=50000, token_volume=10000), # 0.03 is enough for normal price
-        difficulty_score=1.0 # High difficulty, so only downgrade if "Hard Stop" budget exhausted
+        max_budget=Budget(financial=0.03, latency_ms=50000, token_volume=10000),  # 0.03 is enough for normal price
+        difficulty_score=1.0,  # High difficulty, so only downgrade if "Hard Stop" budget exhausted
     )
 
     # 2. Check that normally it would NOT recommend (returns None means original is fine, or no cheaper option found)
     # Actually, recommend_alternative only returns a result if budget is exceeded OR optimization possible.
     # Let's check if budget is exceeded first.
-    cost = pricer.estimate_request_cost(
-        request.model_name,
-        len(request.prompt)//4,
-        request.estimated_output_tokens
-    )
     # 1k in * 0.005 + 1k out * 0.015 = $0.02. Budget is 0.03.
     # So it fits. recommendation should be None (or maybe optimization if diff < threshold, but diff is 1.0)
 
@@ -50,9 +45,9 @@ def test_arbitrageur_dynamic_price_spike() -> None:
     # 3. SPIKE THE PRICE!
     # Update the rate in the Pricer instance
     pricer.rates["gpt-4o"] = ModelRate(
-        input_cost_per_1k=1.0, # Massive spike
+        input_cost_per_1k=1.0,  # Massive spike
         output_cost_per_1k=1.0,
-        latency_ms_per_output_token=10.0
+        latency_ms_per_output_token=10.0,
     )
 
     # 4. Verify Arbitrageur sees the new price and now suggests a downgrade/topology change
@@ -64,7 +59,10 @@ def test_arbitrageur_dynamic_price_spike() -> None:
     # It should have either reduced topology (not possible as it's 1 agent 1 round default)
     # or switched model to cheapest (gpt-4o-mini usually)
     assert suggestion_after_spike.model_name != "gpt-4o"
-    assert "gpt-4o-mini" in suggestion_after_spike.model_name or "cheapest" in suggestion_after_spike.quality_warning.lower()
+    assert (
+        "gpt-4o-mini" in suggestion_after_spike.model_name
+        or "cheapest" in suggestion_after_spike.quality_warning.lower()
+    )
 
 
 def test_arbitrageur_dynamic_rate_swap() -> None:
@@ -78,7 +76,7 @@ def test_arbitrageur_dynamic_rate_swap() -> None:
         model_name="old-model",
         prompt="test",
         estimated_output_tokens=10,
-        max_budget=Budget(financial=1.0, latency_ms=1000, token_volume=1000)
+        max_budget=Budget(financial=1.0, latency_ms=1000, token_volume=1000),
     )
 
     # Initially "old-model" doesn't exist in defaults, so it returns None

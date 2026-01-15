@@ -20,7 +20,7 @@ def test_observability_zero_values() -> None:
         actual_cost=Budget(financial=0.0, latency_ms=0.0, token_volume=0),
         decision=Decision.APPROVED,
         model_used="test-model",
-        input_tokens=100
+        input_tokens=100,
     )
 
     # All efficiency metrics should be 0.0, not raise Error or return Infinity
@@ -38,11 +38,7 @@ def test_observability_precedence() -> None:
     act = Budget(financial=20.0, latency_ms=2000.0, token_volume=200)
 
     trace = EconomicTrace(
-        estimated_cost=est,
-        actual_cost=act,
-        decision=Decision.APPROVED,
-        model_used="test-model",
-        input_tokens=100
+        estimated_cost=est, actual_cost=act, decision=Decision.APPROVED, model_used="test-model", input_tokens=100
     )
 
     # Cost per insight should follow actual ($20) not estimated ($10)
@@ -58,11 +54,7 @@ def test_observability_precedence() -> None:
     act = Budget(financial=50.0, latency_ms=2000.0, token_volume=200)
 
     trace_mixed = EconomicTrace(
-        estimated_cost=est,
-        actual_cost=act,
-        decision=Decision.APPROVED,
-        model_used="test-model",
-        input_tokens=100
+        estimated_cost=est, actual_cost=act, decision=Decision.APPROVED, model_used="test-model", input_tokens=100
     )
 
     assert trace_mixed.tokens_per_dollar == 4.0  # (200 / 50)
@@ -76,12 +68,8 @@ def test_observability_fallback() -> None:
     est = Budget(financial=10.0, latency_ms=1000.0, token_volume=100)
 
     trace = EconomicTrace(
-        estimated_cost=est,
-        actual_cost=None,
-        decision=Decision.APPROVED,
-        model_used="test-model",
-        input_tokens=100
+        estimated_cost=est, actual_cost=None, decision=Decision.APPROVED, model_used="test-model", input_tokens=100
     )
 
     assert trace.cost_per_insight == 10.0
-    assert trace.tokens_per_dollar == 10.0 # 100 / 10
+    assert trace.tokens_per_dollar == 10.0  # 100 / 10
