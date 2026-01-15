@@ -17,24 +17,23 @@ from coreason_economist.rates import ModelRate
 
 def test_arbitrageur_pricer_precedence() -> None:
     """
-    Test that if both 'rates' and 'pricer' are passed to Arbitrageur,
-    'pricer' takes precedence.
+    Test that 'pricer' is used when initializing Arbitrageur.
+
+    Refactor Note: 'rates' argument was removed from Arbitrageur.__init__.
+    This test now verifies that passing 'rates' raises TypeError (Python runtime check)
+    or just verifies correct initialization via pricer.
     """
     # 1. Setup rates
-    rates_ignored = {
-        "model-A": ModelRate(input_cost_per_1k=1.0, output_cost_per_1k=1.0, latency_ms_per_output_token=10.0)
-    }
-
     rates_used = {"model-B": ModelRate(input_cost_per_1k=0.5, output_cost_per_1k=0.5, latency_ms_per_output_token=5.0)}
     pricer = Pricer(rates=rates_used)
 
     # 2. Initialize Arbitrageur
-    arb = Arbitrageur(rates=rates_ignored, pricer=pricer)
+    # We expect strict compliance: we CANNOT pass rates anymore.
+    # So we just test that passing pricer works.
+    arb = Arbitrageur(pricer=pricer)
 
     # 3. Verify
-    # The arbitrageur.rates should point to pricer.rates (model-B), not rates_ignored (model-A)
     assert "model-B" in arb.rates
-    assert "model-A" not in arb.rates
     assert arb.pricer is pricer
 
 

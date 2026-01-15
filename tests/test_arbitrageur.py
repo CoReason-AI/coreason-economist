@@ -12,6 +12,7 @@ from typing import Dict
 
 from coreason_economist.arbitrageur import Arbitrageur
 from coreason_economist.models import RequestPayload
+from coreason_economist.pricer import Pricer
 from coreason_economist.rates import ModelRate
 
 
@@ -51,7 +52,8 @@ def test_recommend_alternative_success() -> None:
         "expensive": ModelRate(input_cost_per_1k=1.0, output_cost_per_1k=1.0, latency_ms_per_output_token=10),
         "cheap": ModelRate(input_cost_per_1k=0.1, output_cost_per_1k=0.1, latency_ms_per_output_token=10),
     }
-    arb = Arbitrageur(rates=rates, threshold=0.5)
+    pricer = Pricer(rates=rates)
+    arb = Arbitrageur(pricer=pricer, threshold=0.5)
 
     payload = RequestPayload(model_name="expensive", prompt="test", difficulty_score=0.2)
 
@@ -70,7 +72,8 @@ def test_recommend_alternative_already_cheapest() -> None:
         "expensive": ModelRate(input_cost_per_1k=1.0, output_cost_per_1k=1.0, latency_ms_per_output_token=10),
         "cheap": ModelRate(input_cost_per_1k=0.1, output_cost_per_1k=0.1, latency_ms_per_output_token=10),
     }
-    arb = Arbitrageur(rates=rates, threshold=0.5)
+    pricer = Pricer(rates=rates)
+    arb = Arbitrageur(pricer=pricer, threshold=0.5)
 
     payload = RequestPayload(model_name="cheap", prompt="test", difficulty_score=0.2)
 
@@ -116,7 +119,8 @@ def test_recommend_topology_reduction_mixed() -> None:
         "expensive": ModelRate(input_cost_per_1k=1.0, output_cost_per_1k=1.0, latency_ms_per_output_token=10),
         "cheap": ModelRate(input_cost_per_1k=0.1, output_cost_per_1k=0.1, latency_ms_per_output_token=10),
     }
-    arb = Arbitrageur(rates=rates, threshold=0.5)
+    pricer = Pricer(rates=rates)
+    arb = Arbitrageur(pricer=pricer, threshold=0.5)
 
     # Expensive model AND complex topology
     payload = RequestPayload(
@@ -215,7 +219,8 @@ def test_empty_rates_graceful_handling() -> None:
     Test that empty rates registry does not crash the Arbitrageur.
     It should return None because it can't find 'cheapest'.
     """
-    arb = Arbitrageur(rates={})
+    pricer = Pricer(rates={})
+    arb = Arbitrageur(pricer=pricer)
     payload = RequestPayload(model_name="gpt-4o", prompt="test", difficulty_score=0.1)
 
     # Case 1: Model not in empty rates -> Returns None immediately
