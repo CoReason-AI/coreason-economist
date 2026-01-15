@@ -11,6 +11,7 @@
 import pytest
 from coreason_economist.arbitrageur import Arbitrageur
 from coreason_economist.models import Budget, RequestPayload
+from coreason_economist.pricer import Pricer
 
 # Rates for gpt-4o:
 # Input: $0.005 / 1k
@@ -26,7 +27,7 @@ from coreason_economist.models import Budget, RequestPayload
 
 @pytest.fixture  # type: ignore
 def arbitrageur() -> Arbitrageur:
-    return Arbitrageur()
+    return Arbitrageur(pricer=Pricer())
 
 
 def test_exact_budget_match(arbitrageur: Arbitrageur) -> None:

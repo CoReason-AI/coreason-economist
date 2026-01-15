@@ -22,19 +22,19 @@ class Arbitrageur:
 
     def __init__(
         self,
-        pricer: Optional[Pricer] = None,
+        pricer: Pricer,
         threshold: float = 0.5,
     ) -> None:
         """
         Initialize the Arbitrageur.
 
         Args:
-            pricer: Optional Pricer instance. If None, a default one is created.
+            pricer: Pricer instance (Mandatory to ensure dependency injection).
             threshold: Difficulty score threshold below which to suggest downgrades.
                        Default is 0.5.
         """
         self.threshold = threshold
-        self.pricer = pricer if pricer is not None else Pricer()
+        self.pricer = pricer
 
     @property
     def rates(self) -> Dict[str, ModelRate]:

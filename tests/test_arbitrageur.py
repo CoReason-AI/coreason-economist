@@ -18,17 +18,19 @@ from coreason_economist.rates import ModelRate
 
 def test_arbitrageur_initialization() -> None:
     """Test initializing Arbitrageur with defaults and overrides."""
-    arb = Arbitrageur()
+    pricer = Pricer()
+    arb = Arbitrageur(pricer=pricer)
     assert arb.threshold == 0.5
     assert "gpt-4o" in arb.rates
 
-    arb_custom = Arbitrageur(threshold=0.8)
+    arb_custom = Arbitrageur(pricer=pricer, threshold=0.8)
     assert arb_custom.threshold == 0.8
 
 
 def test_recommend_alternative_no_difficulty() -> None:
     """Test that it returns None if difficulty_score is missing."""
-    arb = Arbitrageur()
+    pricer = Pricer()
+    arb = Arbitrageur(pricer=pricer)
     payload = RequestPayload(model_name="gpt-4o", prompt="test")
     assert payload.difficulty_score is None
 
@@ -38,7 +40,8 @@ def test_recommend_alternative_no_difficulty() -> None:
 
 def test_recommend_alternative_high_difficulty() -> None:
     """Test that it returns None if difficulty is above threshold."""
-    arb = Arbitrageur(threshold=0.5)
+    pricer = Pricer()
+    arb = Arbitrageur(pricer=pricer, threshold=0.5)
     payload = RequestPayload(model_name="gpt-4o", prompt="test", difficulty_score=0.6)
 
     recommendation = arb.recommend_alternative(payload)
@@ -83,7 +86,8 @@ def test_recommend_alternative_already_cheapest() -> None:
 
 def test_recommend_alternative_unknown_model() -> None:
     """Test that it ignores unknown models."""
-    arb = Arbitrageur()
+    pricer = Pricer()
+    arb = Arbitrageur(pricer=pricer)
     payload = RequestPayload(model_name="unknown-model-xyz", prompt="test", difficulty_score=0.1)
 
     recommendation = arb.recommend_alternative(payload)
@@ -92,7 +96,8 @@ def test_recommend_alternative_unknown_model() -> None:
 
 def test_recommend_topology_reduction() -> None:
     """Test that Arbitrageur recommends reducing topology for low difficulty tasks."""
-    arb = Arbitrageur(threshold=0.5)
+    pricer = Pricer()
+    arb = Arbitrageur(pricer=pricer, threshold=0.5)
 
     # Complex topology, low difficulty
     payload = RequestPayload(
@@ -143,7 +148,8 @@ def test_recommend_topology_reduction_mixed() -> None:
 
 def test_no_topology_change_needed() -> None:
     """Test that it doesn't change topology if already simple."""
-    arb = Arbitrageur(threshold=0.5)
+    pricer = Pricer()
+    arb = Arbitrageur(pricer=pricer, threshold=0.5)
 
     payload = RequestPayload(
         model_name="gpt-4o",
@@ -168,7 +174,8 @@ def test_partial_topology_reduction() -> None:
     Test scenario: agent_count=1, rounds=5.
     Expect: rounds reduced to 1.
     """
-    arb = Arbitrageur(threshold=0.5)
+    pricer = Pricer()
+    arb = Arbitrageur(pricer=pricer, threshold=0.5)
     payload = RequestPayload(model_name="gpt-4o", prompt="test", difficulty_score=0.2, agent_count=1, rounds=5)
 
     rec = arb.recommend_alternative(payload)
@@ -186,7 +193,8 @@ def test_topology_reduction_keep_model() -> None:
     Expect: Topology reduction, model name unchanged.
     """
     # Assuming gpt-4o-mini is cheapest in default rates
-    arb = Arbitrageur(threshold=0.5)
+    pricer = Pricer()
+    arb = Arbitrageur(pricer=pricer, threshold=0.5)
     payload = RequestPayload(model_name="gpt-4o-mini", prompt="test", difficulty_score=0.2, agent_count=5, rounds=1)
 
     rec = arb.recommend_alternative(payload)
@@ -203,7 +211,8 @@ def test_boundary_difficulty() -> None:
     0.5 -> No change (None).
     0.499999 -> Change.
     """
-    arb = Arbitrageur(threshold=0.5)
+    pricer = Pricer()
+    arb = Arbitrageur(pricer=pricer, threshold=0.5)
 
     # At threshold
     p1 = RequestPayload(model_name="gpt-4o", prompt="test", difficulty_score=0.5)
