@@ -55,6 +55,9 @@ class Economist:
             budget_authority if budget_authority is not None else BudgetAuthority(pricer=self.pricer)
         )
         self.arbitrageur = arbitrageur if arbitrageur is not None else Arbitrageur(pricer=self.pricer)
+        # Prevent Split-Brain: Force synchronization of the Pricer
+        self.arbitrageur.pricer = self.pricer
+
         self.voc_engine = voc_engine if voc_engine is not None else VOCEngine()
 
     def check_execution(self, request: RequestPayload) -> EconomicTrace:
