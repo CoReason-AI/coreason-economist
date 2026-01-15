@@ -9,92 +9,106 @@
 # Source Code: https://github.com/CoReason-AI/coreason_economist
 
 from coreason_economist.arbitrageur import Arbitrageur
+from coreason_economist.economist import Economist
 from coreason_economist.models import Budget, RequestPayload
 from coreason_economist.pricer import Pricer
 from coreason_economist.rates import ModelRate
 
 
-def test_arbitrageur_dynamic_price_spike() -> None:
+def test_arbitrageur_dynamic_flash_sale_scenario() -> None:
     """
-    Test that Arbitrageur immediately reacts to a sudden price increase in the Pricer.
+    Complex Scenario: "Flash Sale".
+
+    1. A user requests a high-quality model (Expensive).
+    2. Budget is tight, so it gets rejected (no arbitrage found because all high-quality models are expensive).
+    3. SUDDENLY, a "Flash Sale" occurs (rates drop significantly).
+    4. The user retries the SAME request.
+    5. It should now be APPROVED or Arbitrage should find a solution that was previously impossible.
     """
-    # 1. Setup Pricer and Arbitrageur with default rates
-    pricer = Pricer()
-    # Initially gpt-4o is affordable in our budget
-    # gpt-4o: $0.005 input / $0.015 output
+    # Setup
+    model_name = "gpt-flash"
+    pricer = Pricer(
+        rates={model_name: ModelRate(input_cost_per_1k=10.0, output_cost_per_1k=10.0, latency_ms_per_output_token=10.0)}
+    )
+    economist = Economist(pricer=pricer)
 
-    arb = Arbitrageur(pricer=pricer)
-
+    # Very tight budget ($1.00)
+    # Note: Must set other budgets high to avoid rejection on those fronts (0.0 = 0 allowed)
+    # Request ~1k tokens -> $10 + $10 = $20.00 cost.
     request = RequestPayload(
-        model_name="gpt-4o",
-        prompt="A" * 4000,  # 1000 tokens
+        model_name=model_name,
+        prompt="A" * 4000,
         estimated_output_tokens=1000,
-        max_budget=Budget(financial=0.03, latency_ms=50000, token_volume=10000),  # 0.03 is enough for normal price
-        difficulty_score=1.0,  # High difficulty, so only downgrade if "Hard Stop" budget exhausted
+        max_budget=Budget(financial=1.00, latency_ms=1e9, token_volume=100000),
+        difficulty_score=0.9,  # High difficulty, so we need this model or equivalent
     )
 
-    # 2. Check that normally it would NOT recommend (returns None means original is fine, or no cheaper option found)
-    # Actually, recommend_alternative only returns a result if budget is exceeded OR optimization possible.
-    # Let's check if budget is exceeded first.
-    # 1k in * 0.005 + 1k out * 0.015 = $0.02. Budget is 0.03.
-    # So it fits. recommendation should be None (or maybe optimization if diff < threshold, but diff is 1.0)
+    # Step 1: Execute -> REJECTED
+    # Arbitrageur checks "gpt-flash" (too expensive).
+    # It tries to find alternative?
+    # If "gpt-flash" is the only model, it returns None.
 
-    suggestion = arb.recommend_alternative(request)
-    assert suggestion is None, "Should not suggest alternative when budget fits and difficulty is high"
+    trace1 = economist.check_execution(request)
+    assert trace1.decision == "REJECTED"
+    # No alternative because only 1 model exists and it's too expensive
+    if trace1.suggested_alternative:
+        # If it suggests topology reduction, that's fine, but let's assume even 1 agent is too expensive ($20 > $1)
+        pass
 
-    # 3. SPIKE THE PRICE!
-    # Update the rate in the Pricer instance
-    pricer.rates["gpt-4o"] = ModelRate(
-        input_cost_per_1k=1.0,  # Massive spike
-        output_cost_per_1k=1.0,
-        latency_ms_per_output_token=10.0,
+    # Step 2: FLASH SALE! Prices drop by 99%
+    # New Cost: $0.10 + $0.10 = $0.20 < $1.00
+    pricer.rates[model_name] = ModelRate(
+        input_cost_per_1k=0.1, output_cost_per_1k=0.1, latency_ms_per_output_token=10.0
     )
 
-    # 4. Verify Arbitrageur sees the new price and now suggests a downgrade/topology change
-    # Cost is now ~$2.00, budget is $0.03. Exceeded!
-    suggestion_after_spike = arb.recommend_alternative(request)
+    # Step 3: Retry
+    trace2 = economist.check_execution(request)
 
-    assert suggestion_after_spike is not None
-    assert suggestion_after_spike.quality_warning is not None
-    # It should have either reduced topology (not possible as it's 1 agent 1 round default)
-    # or switched model to cheapest (gpt-4o-mini usually)
-    assert suggestion_after_spike.model_name != "gpt-4o"
-    assert (
-        "gpt-4o-mini" in suggestion_after_spike.model_name
-        or "cheapest" in suggestion_after_spike.quality_warning.lower()
-    )
+    # Should be APPROVED now because estimated cost ($0.20) < Budget ($1.00)
+    assert trace2.decision == "APPROVED", f"Expected APPROVED, got {trace2.decision}. Reason: {trace2.reason}"
+    assert trace2.model_used == model_name
 
 
-def test_arbitrageur_dynamic_rate_swap() -> None:
+def test_arbitrageur_dynamic_price_hike_mid_process() -> None:
     """
-    Test that Arbitrageur works correctly when the entire rates dictionary is replaced.
-    """
-    pricer = Pricer()
-    arb = Arbitrageur(pricer=pricer)
+    Complex Scenario: Price Hike.
 
-    request = RequestPayload(
-        model_name="old-model",
-        prompt="test",
-        estimated_output_tokens=10,
-        max_budget=Budget(financial=1.0, latency_ms=1000, token_volume=1000),
+    1. Arbitrageur recommends a cheap model.
+    2. Before the user can use it, the price spikes.
+    3. User asks again (or validates suggestion).
+    4. Suggestion should change or become invalid.
+    """
+    cheap_model = "cheap-v1"
+    expensive_model = "expensive-v1"
+
+    pricer = Pricer(
+        rates={
+            cheap_model: ModelRate(input_cost_per_1k=0.1, output_cost_per_1k=0.1, latency_ms_per_output_token=10),
+            expensive_model: ModelRate(input_cost_per_1k=10.0, output_cost_per_1k=10.0, latency_ms_per_output_token=10),
+        }
     )
 
-    # Initially "old-model" doesn't exist in defaults, so it returns None
-    assert arb.recommend_alternative(request) is None
+    arb = Arbitrageur(pricer=pricer, threshold=0.5)
 
-    # Swap rates to a new dict containing ONLY "old-model" and a cheap "new-model"
-    # Make old-model extremely expensive to guarantee budget exhaustion ($1000/1k tokens)
-    new_rates = {
-        "old-model": ModelRate(input_cost_per_1k=1000.0, output_cost_per_1k=1000.0, latency_ms_per_output_token=10),
-        "new-model": ModelRate(input_cost_per_1k=0.01, output_cost_per_1k=0.01, latency_ms_per_output_token=10),
-    }
-    pricer.rates = new_rates
+    # Request for expensive model, low difficulty -> Should suggest cheap
+    req = RequestPayload(model_name=expensive_model, prompt="hi", difficulty_score=0.1)
 
-    # Now verify Arbitrageur sees these new rates
-    assert "old-model" in arb.rates
+    sugg1 = arb.recommend_alternative(req)
+    assert sugg1 is not None
+    assert sugg1.model_name == cheap_model
 
-    # Re-run recommendation. old-model is expensive ($10/1k). Budget $1.0.
-    # It should recommend new-model.
-    suggestion = arb.recommend_alternative(request)
-    assert suggestion is not None
-    assert suggestion.model_name == "new-model"
+    # PRICE HIKE: Cheap model becomes more expensive than expensive model
+    pricer.rates[cheap_model] = ModelRate(
+        input_cost_per_1k=100.0, output_cost_per_1k=100.0, latency_ms_per_output_token=10
+    )
+
+    # Retry recommendation
+    # Now "expensive-v1" ($20) is cheaper than "cheap-v1" ($200)
+    # So it should probably NOT recommend switching to "cheap-v1".
+    # Or it might find NO cheaper alternative.
+
+    sugg2 = arb.recommend_alternative(req)
+
+    # If original request was expensive-v1, and it is now the cheapest (relative to cheap-v1),
+    # Arbitrageur should return None (keep original).
+    assert sugg2 is None

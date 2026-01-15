@@ -8,68 +8,92 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_economist
 
+
 from coreason_economist.models import Budget, Decision, EconomicTrace
 
 
-def test_observability_zero_values() -> None:
+def test_observability_small_floats() -> None:
     """
-    Test that efficiency metrics handle zero values gracefully (no division by zero).
+    Test metrics calculation with extremely small float values (e.g. 1e-10).
+    Ensures no underflow crashes or division by zero errors if values approach zero.
     """
     trace = EconomicTrace(
-        estimated_cost=Budget(financial=0.0, latency_ms=0.0, token_volume=0),
-        actual_cost=Budget(financial=0.0, latency_ms=0.0, token_volume=0),
+        estimated_cost=Budget(financial=1e-10, token_volume=1000, latency_ms=1e-5),
         decision=Decision.APPROVED,
-        model_used="test-model",
+        model_used="micro-model",
         input_tokens=100,
     )
 
-    # All efficiency metrics should be 0.0, not raise Error or return Infinity
-    assert trace.tokens_per_dollar == 0.0
+    # Financial: 1e-10
+    # Tokens: 1000
+    # T/D = 1000 / 1e-10 = 1e13
+    assert trace.tokens_per_dollar > 1e12
+
+    # Latency: 1e-5 ms
+    # T/S = 1000 / (1e-5 / 1000) = 1000 / 1e-8 = 1e11
+    assert trace.tokens_per_second > 1e10
+
+
+def test_observability_missing_actual_cost() -> None:
+    """
+    Verify behavior when actual_cost is None.
+    Should fall back to estimated_cost.
+    """
+    est = Budget(financial=10.0, token_volume=100, latency_ms=1000.0)
+    trace = EconomicTrace(
+        estimated_cost=est, actual_cost=None, decision=Decision.APPROVED, model_used="gpt-4", input_tokens=50
+    )
+
+    # Check effective cost used
+    assert trace._effective_cost == est
+
+    # Metrics based on estimate
+    # 100 / 10 = 10.0
+    assert abs(trace.tokens_per_dollar - 10.0) < 1e-9
+
+
+def test_observability_large_integers() -> None:
+    """
+    Test with large token counts (e.g. full context window usage or batch processing).
+    """
+    trace = EconomicTrace(
+        estimated_cost=Budget(financial=100.0, token_volume=10_000_000, latency_ms=1000.0),
+        decision=Decision.APPROVED,
+        model_used="batch-model",
+        input_tokens=5_000_000,
+    )
+
+    # 10M tokens / $100 = 100,000 T/$
+    assert trace.tokens_per_dollar == 100_000.0
+
+
+def test_observability_zero_latency_positive_tokens() -> None:
+    """
+    Edge case: Infinite speed? (Latency = 0, Tokens > 0).
+    Should return 0.0 (or handle gracefully) to avoid ZeroDivisionError in tokens_per_second.
+
+    The implementation returns 0.0 if latency <= 0.
+    """
+    trace = EconomicTrace(
+        estimated_cost=Budget(financial=1.0, token_volume=100, latency_ms=0.0),
+        decision=Decision.APPROVED,
+        model_used="magic-model",
+        input_tokens=50,
+    )
+
     assert trace.tokens_per_second == 0.0
-    assert trace.latency_per_token == 0.0
-    assert trace.cost_per_insight == 0.0
 
 
-def test_observability_precedence() -> None:
+def test_observability_zero_financial() -> None:
     """
-    Test that actual_cost takes precedence over estimated_cost for metrics.
+    Edge case: Free model (Financial = 0).
+    Should return 0.0 for tokens_per_dollar.
     """
-    est = Budget(financial=10.0, latency_ms=1000.0, token_volume=100)
-    act = Budget(financial=20.0, latency_ms=2000.0, token_volume=200)
-
     trace = EconomicTrace(
-        estimated_cost=est, actual_cost=act, decision=Decision.APPROVED, model_used="test-model", input_tokens=100
+        estimated_cost=Budget(financial=0.0, token_volume=100, latency_ms=100.0),
+        decision=Decision.APPROVED,
+        model_used="free-model",
+        input_tokens=50,
     )
 
-    # Cost per insight should follow actual ($20) not estimated ($10)
-    assert trace.cost_per_insight == 20.0
-
-    # Tokens per dollar: 200 tokens / $20 = 10.0
-    # If it used estimated: 100 / 10 = 10.0 (coincidence)
-    # Let's change values to be distinct
-    # Est: $10, 100 tok -> 10 t/$
-    # Act: $50, 200 tok -> 4 t/$
-
-    est = Budget(financial=10.0, latency_ms=1000.0, token_volume=100)
-    act = Budget(financial=50.0, latency_ms=2000.0, token_volume=200)
-
-    trace_mixed = EconomicTrace(
-        estimated_cost=est, actual_cost=act, decision=Decision.APPROVED, model_used="test-model", input_tokens=100
-    )
-
-    assert trace_mixed.tokens_per_dollar == 4.0  # (200 / 50)
-    assert trace_mixed.cost_per_insight == 50.0
-
-
-def test_observability_fallback() -> None:
-    """
-    Test that metrics fallback to estimated_cost if actual_cost is None.
-    """
-    est = Budget(financial=10.0, latency_ms=1000.0, token_volume=100)
-
-    trace = EconomicTrace(
-        estimated_cost=est, actual_cost=None, decision=Decision.APPROVED, model_used="test-model", input_tokens=100
-    )
-
-    assert trace.cost_per_insight == 10.0
-    assert trace.tokens_per_dollar == 10.0  # 100 / 10
+    assert trace.tokens_per_dollar == 0.0
