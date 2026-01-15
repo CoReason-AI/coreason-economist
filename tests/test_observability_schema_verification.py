@@ -9,9 +9,11 @@
 # Source Code: https://github.com/CoReason-AI/coreason_economist
 
 import json
-from coreason_economist.models import EconomicTrace, Budget, Decision
 
-def test_observability_computed_fields_serialization():
+from coreason_economist.models import Budget, Decision, EconomicTrace
+
+
+def test_observability_computed_fields_serialization() -> None:
     """
     Verify that computed fields like latency_per_token are included in the
     serialized output of EconomicTrace.
@@ -21,7 +23,7 @@ def test_observability_computed_fields_serialization():
         actual_cost=Budget(financial=1.0, token_volume=2000, latency_ms=2000),
         decision=Decision.APPROVED,
         model_used="gpt-4",
-        input_tokens=100
+        input_tokens=100,
     )
 
     # Serialize to JSON
@@ -50,7 +52,8 @@ def test_observability_computed_fields_serialization():
     # cost_per_insight = 1.0
     assert data["cost_per_insight"] == 1.0
 
-def test_observability_computed_fields_zero_division():
+
+def test_observability_computed_fields_zero_division() -> None:
     """
     Verify that computed fields handle zero values gracefully (return 0.0).
     """
@@ -58,7 +61,7 @@ def test_observability_computed_fields_zero_division():
         estimated_cost=Budget(financial=0.0, token_volume=0, latency_ms=0),
         decision=Decision.APPROVED,
         model_used="gpt-4",
-        input_tokens=0
+        input_tokens=0,
     )
 
     json_output = trace.model_dump_json()
