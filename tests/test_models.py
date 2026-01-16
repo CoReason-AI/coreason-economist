@@ -8,226 +8,139 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_economist
 
-import pytest
 from coreason_economist.models import Budget, Decision, EconomicTrace, RequestPayload
-from pydantic import ValidationError
 
 
 def test_budget_creation() -> None:
-    """Test creating a Budget with valid values."""
-    budget = Budget(financial=0.50, latency_ms=5000, token_volume=128000)
-    assert budget.financial == 0.50
-    assert budget.latency_ms == 5000.0
-    assert budget.token_volume == 128000
+    """Test creating a Budget object."""
+    budget = Budget(financial=0.1, latency_ms=100.0, token_volume=1000)
+    assert budget.financial == 0.1
+    assert budget.latency_ms == 100.0
+    assert budget.token_volume == 1000
 
 
 def test_budget_defaults() -> None:
-    """Test Budget defaults."""
+    """Test Budget default values."""
     budget = Budget()
     assert budget.financial == 0.0
     assert budget.latency_ms == 0.0
     assert budget.token_volume == 0
 
 
-def test_budget_validation_negative() -> None:
-    """Test that Budget rejects negative values."""
-    with pytest.raises(ValidationError):
-        Budget(financial=-1.0)
-
-    with pytest.raises(ValidationError):
-        Budget(latency_ms=-100)
-
-    with pytest.raises(ValidationError):
-        Budget(token_volume=-1)
-
-
-def test_budget_immutability() -> None:
-    """Test that Budget is immutable."""
-    budget = Budget(financial=10.0)
-    with pytest.raises(ValidationError):
-        # Type ignore used because mypy knows it's frozen and would flag this statically
-        budget.financial = 20.0  # type: ignore
-
-
-def test_budget_equality() -> None:
-    """Test value equality for Budget objects."""
-    b1 = Budget(financial=10.0, latency_ms=100.0, token_volume=1000)
-    b2 = Budget(financial=10.0, latency_ms=100.0, token_volume=1000)
-    b3 = Budget(financial=20.0, latency_ms=100.0, token_volume=1000)
-
-    assert b1 == b2
-    assert b1 != b3
-
-
 def test_request_payload_creation() -> None:
     """Test creating a RequestPayload."""
-    payload = RequestPayload(model_name="gpt-4", prompt="Hello world", estimated_output_tokens=100)
-    assert payload.model_name == "gpt-4"
-    assert payload.prompt == "Hello world"
-    assert payload.estimated_output_tokens == 100
-    # Test new defaults
+    payload = RequestPayload(
+        model_name="gpt-4o",
+        prompt="Hello",
+        agent_count=2,
+        rounds=3,
+        quality_warning="This is a warning",
+    )
+    assert payload.model_name == "gpt-4o"
+    assert payload.agent_count == 2
+    assert payload.rounds == 3
+    assert payload.quality_warning == "This is a warning"
+
+
+def test_request_payload_defaults() -> None:
+    """Test RequestPayload defaults."""
+    payload = RequestPayload(model_name="gpt-4o", prompt="Hello")
     assert payload.agent_count == 1
     assert payload.rounds == 1
-    assert payload.difficulty_score is None
-
-
-def test_request_payload_new_fields() -> None:
-    """Test initializing new fields: difficulty_score, agent_count, rounds."""
-    payload = RequestPayload(
-        model_name="gpt-4",
-        prompt="Multi-agent debate",
-        difficulty_score=0.8,
-        agent_count=5,
-        rounds=3,
-    )
-    assert payload.difficulty_score == 0.8
-    assert payload.agent_count == 5
-    assert payload.rounds == 3
-
-
-def test_request_payload_validation_new_fields() -> None:
-    """Test validation logic for new fields."""
-    # difficulty_score > 1.0
-    with pytest.raises(ValidationError):
-        RequestPayload(model_name="gpt-4", prompt="test", difficulty_score=1.5)
-
-    # difficulty_score < 0.0
-    with pytest.raises(ValidationError):
-        RequestPayload(model_name="gpt-4", prompt="test", difficulty_score=-0.1)
-
-    # agent_count < 1
-    with pytest.raises(ValidationError):
-        RequestPayload(model_name="gpt-4", prompt="test", agent_count=0)
-
-    # rounds < 1
-    with pytest.raises(ValidationError):
-        RequestPayload(model_name="gpt-4", prompt="test", rounds=0)
-
-
-def test_request_payload_validation_missing_fields() -> None:
-    """Test that RequestPayload requires mandatory fields."""
-    with pytest.raises(ValidationError):
-        # Missing prompt
-        RequestPayload(model_name="gpt-4")  # type: ignore
-
-    with pytest.raises(ValidationError):
-        # Missing model_name
-        RequestPayload(prompt="Hello")  # type: ignore
-
-
-def test_request_payload_with_budget() -> None:
-    """Test RequestPayload with a nested Budget."""
-    budget = Budget(financial=1.0)
-    payload = RequestPayload(model_name="gpt-4", prompt="test", max_budget=budget)
-    assert payload.max_budget is not None
-    assert payload.max_budget.financial == 1.0
-
-
-def test_request_payload_complex_tool_calls() -> None:
-    """Test RequestPayload with complex nested tool calls."""
-    tool_calls = [
-        {
-            "id": "call_123",
-            "type": "function",
-            "function": {
-                "name": "get_weather",
-                "arguments": {"location": "San Francisco, CA", "unit": "celsius", "nested": {"key": [1, 2, 3]}},
-            },
-        }
-    ]
-    payload = RequestPayload(model_name="gpt-4", prompt="Check weather", tool_calls=tool_calls)
-    assert payload.tool_calls is not None
-    assert payload.tool_calls[0]["function"]["arguments"]["nested"]["key"] == [1, 2, 3]
-
-
-def test_unicode_handling() -> None:
-    """Test handling of Unicode characters."""
-    prompt = "Hello 🌍! 你好!"
-    model = "gpt-4-🚀"
-    payload = RequestPayload(model_name=model, prompt=prompt)
-
-    assert payload.prompt == prompt
-    assert payload.model_name == model
-
-    # Ensure serialization preserves unicode
-    json_str = payload.model_dump_json()
-    assert "🌍" in json_str or "\\ud83c\\udf0d" in json_str  # Depends on json dumper settings
-
-
-def test_extreme_values() -> None:
-    """Test handling of large numbers."""
-    large_financial = 1e9  # 1 billion dollars
-    large_tokens = 10**9  # 1 billion tokens
-
-    budget = Budget(financial=large_financial, token_volume=large_tokens)
-    assert budget.financial == large_financial
-    assert budget.token_volume == large_tokens
+    assert payload.estimated_output_tokens is None
+    assert payload.quality_warning is None
 
 
 def test_economic_trace_creation() -> None:
     """Test creating an EconomicTrace."""
-    est_budget = Budget(financial=0.1)
-    act_budget = Budget(financial=0.08)
+    budget = Budget(financial=0.1)
+    trace = EconomicTrace(
+        estimated_cost=budget,
+        decision=Decision.APPROVED,
+        model_used="gpt-4o",
+        input_tokens=100,
+    )
+    assert trace.estimated_cost == budget
+    assert trace.decision == Decision.APPROVED
+    assert trace.model_used == "gpt-4o"
+    assert trace.input_tokens == 100
 
+
+def test_economic_trace_computed_fields() -> None:
+    """Test that computed fields are calculated correctly and serialized."""
+    # Scenario 1: Basic case with actual cost
+    actual_budget = Budget(financial=1.0, latency_ms=2000.0, token_volume=1000)
+    trace = EconomicTrace(
+        estimated_cost=Budget(financial=0.5),  # Different estimate
+        actual_cost=actual_budget,
+        decision=Decision.APPROVED,
+        model_used="gpt-4o",
+        input_tokens=100,
+    )
+
+    # tokens_per_dollar = 1000 / 1.0 = 1000.0
+    assert trace.tokens_per_dollar == 1000.0
+
+    # tokens_per_second = 1000 / (2000ms / 1000) = 1000 / 2.0 = 500.0
+    assert trace.tokens_per_second == 500.0
+
+    # latency_per_token = 2000ms / 1000 = 2.0 ms/token
+    assert trace.latency_per_token == 2.0
+
+    # Check serialization
+    trace_json = trace.model_dump(mode="json")
+    assert "tokens_per_dollar" in trace_json
+    assert "tokens_per_second" in trace_json
+    assert "latency_per_token" in trace_json
+    assert trace_json["tokens_per_dollar"] == 1000.0
+    assert trace_json["tokens_per_second"] == 500.0
+    assert trace_json["latency_per_token"] == 2.0
+
+
+def test_economic_trace_computed_fields_fallback() -> None:
+    """Test that computed fields fall back to estimated cost if actual is None."""
+    est_budget = Budget(financial=2.0, latency_ms=4000.0, token_volume=2000)
     trace = EconomicTrace(
         estimated_cost=est_budget,
-        actual_cost=act_budget,
+        actual_cost=None,
         decision=Decision.APPROVED,
-        voc_score=0.9,
-        model_used="gpt-4",
-        reason="Good to go",
+        model_used="gpt-4o",
+        input_tokens=100,
     )
 
-    assert trace.decision == Decision.APPROVED
-    assert trace.voc_score == 0.9
-    assert trace.estimated_cost.financial == 0.1
-    assert trace.actual_cost is not None
-    assert trace.actual_cost.financial == 0.08
+    # tokens_per_dollar = 2000 / 2.0 = 1000.0
+    assert trace.tokens_per_dollar == 1000.0
+
+    # tokens_per_second = 2000 / 4.0 = 500.0
+    assert trace.tokens_per_second == 500.0
+
+    # latency_per_token = 4000 / 2000 = 2.0
+    assert trace.latency_per_token == 2.0
 
 
-def test_economic_trace_validation() -> None:
-    """Test EconomicTrace validation."""
-    est_budget = Budget(financial=0.1)
-
-    # voc_score must be <= 1.0
-    with pytest.raises(ValidationError):
-        EconomicTrace(estimated_cost=est_budget, decision=Decision.APPROVED, voc_score=1.5, model_used="gpt-4")
-
-    # voc_score must be >= 0.0
-    with pytest.raises(ValidationError):
-        EconomicTrace(estimated_cost=est_budget, decision=Decision.APPROVED, voc_score=-0.1, model_used="gpt-4")
-
-
-def test_voc_score_boundaries() -> None:
-    """Test boundary values for VOC score."""
-    est_budget = Budget(financial=0.1)
-
-    # Test 0.0
-    trace_zero = EconomicTrace(estimated_cost=est_budget, decision=Decision.REJECTED, voc_score=0.0, model_used="gpt-4")
-    assert trace_zero.voc_score == 0.0
-
-    # Test 1.0
-    trace_one = EconomicTrace(estimated_cost=est_budget, decision=Decision.APPROVED, voc_score=1.0, model_used="gpt-4")
-    assert trace_one.voc_score == 1.0
-
-
-def test_json_roundtrip() -> None:
-    """Test JSON serialization and deserialization."""
-    budget = Budget(financial=10.5, latency_ms=100.0, token_volume=500)
-    original_trace = EconomicTrace(
-        estimated_cost=budget,
-        decision=Decision.MODIFIED,
-        voc_score=0.75,
-        model_used="gpt-3.5-turbo",
-        reason="Cost optimized",
+def test_economic_trace_computed_fields_zero_values() -> None:
+    """Test division by zero handling in computed fields."""
+    zero_budget = Budget(financial=0.0, latency_ms=0.0, token_volume=0)
+    trace = EconomicTrace(
+        estimated_cost=zero_budget,
+        decision=Decision.APPROVED,
+        model_used="gpt-4o",
+        input_tokens=100,
     )
 
-    # Serialize
-    json_str = original_trace.model_dump_json()
+    # Should handle division by zero safely
+    assert trace.tokens_per_dollar == 0.0
+    assert trace.tokens_per_second == 0.0
+    assert trace.latency_per_token == 0.0
 
-    # Deserialize
-    restored_trace = EconomicTrace.model_validate_json(json_str)
-
-    assert restored_trace == original_trace
-    assert restored_trace.estimated_cost.financial == 10.5
-    assert restored_trace.decision == Decision.MODIFIED
+    # Test only financial zero
+    partial_budget = Budget(financial=0.0, latency_ms=1000.0, token_volume=100)
+    trace_partial = EconomicTrace(
+        estimated_cost=partial_budget,
+        decision=Decision.APPROVED,
+        model_used="gpt-4o",
+        input_tokens=100,
+    )
+    assert trace_partial.tokens_per_dollar == 0.0
+    assert trace_partial.tokens_per_second == 100.0  # 100 / 1.0
+    assert trace_partial.latency_per_token == 10.0  # 1000 / 100

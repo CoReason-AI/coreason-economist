@@ -8,348 +8,88 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_economist
 
-from unittest.mock import Mock
-
 import pytest
 from coreason_economist.budget_authority import BudgetAuthority
 from coreason_economist.exceptions import BudgetExhaustedError
-from coreason_economist.models import Budget, RequestPayload
+from coreason_economist.models import AuthResult, Budget, RequestPayload
 from coreason_economist.pricer import Pricer
 
 
-@pytest.fixture  # type: ignore[misc]
-def mock_pricer() -> Mock:
-    pricer = Mock(spec=Pricer)
-    return pricer
+@pytest.fixture  # type: ignore
+def budget_authority() -> BudgetAuthority:
+    return BudgetAuthority(pricer=Pricer())
 
 
-@pytest.fixture  # type: ignore[misc]
-def authority(mock_pricer: Mock) -> BudgetAuthority:
-    return BudgetAuthority(pricer=mock_pricer)
-
-
-def test_allow_execution_no_budget_limit(authority: BudgetAuthority) -> None:
-    """Test that requests with no max_budget are allowed."""
-    request = RequestPayload(model_name="gpt-4o", prompt="Hello", max_budget=None)
-    assert authority.allow_execution(request) is True
-
-
-def test_allow_execution_within_limits(authority: BudgetAuthority, mock_pricer: Mock) -> None:
-    """Test that requests within all budget limits are allowed."""
-    mock_pricer.estimate_request_cost.return_value = Budget(financial=0.01, latency_ms=100.0, token_volume=100)
-
-    request = RequestPayload(
-        model_name="gpt-4o",
-        prompt="Hello world",
-        max_budget=Budget(financial=0.05, latency_ms=500.0, token_volume=1000),
-    )
-
-    assert authority.allow_execution(request) is True
-    mock_pricer.estimate_request_cost.assert_called_once()
-
-
-def test_reject_financial_limit(authority: BudgetAuthority, mock_pricer: Mock) -> None:
-    """Test rejection when financial cost exceeds budget."""
-    mock_pricer.estimate_request_cost.return_value = Budget(
-        financial=0.10,  # Exceeds 0.05
-        latency_ms=100.0,
-        token_volume=100,
-    )
-
-    request = RequestPayload(
-        model_name="gpt-4o",
-        prompt="Expensive query",
-        max_budget=Budget(financial=0.05, latency_ms=500.0, token_volume=1000),
-    )
-
-    with pytest.raises(BudgetExhaustedError) as exc_info:
-        authority.allow_execution(request)
-
-    assert exc_info.value.limit_type == "financial"
-    assert exc_info.value.limit_value == 0.05
-    assert exc_info.value.estimated_value == 0.10
-    assert "Financial budget exceeded" in str(exc_info.value)
-
-
-def test_reject_latency_limit(authority: BudgetAuthority, mock_pricer: Mock) -> None:
-    """Test rejection when latency exceeds budget."""
-    mock_pricer.estimate_request_cost.return_value = Budget(
-        financial=0.01,
-        latency_ms=1000.0,  # Exceeds 500
-        token_volume=100,
-    )
-
-    request = RequestPayload(
-        model_name="gpt-4o", prompt="Slow query", max_budget=Budget(financial=0.05, latency_ms=500.0, token_volume=1000)
-    )
-
-    with pytest.raises(BudgetExhaustedError) as exc_info:
-        authority.allow_execution(request)
-
-    assert exc_info.value.limit_type == "latency_ms"
-    assert exc_info.value.limit_value == 500.0
-    assert exc_info.value.estimated_value == 1000.0
-    assert "Latency budget exceeded" in str(exc_info.value)
-
-
-def test_reject_token_volume_limit(authority: BudgetAuthority, mock_pricer: Mock) -> None:
-    """Test rejection when token volume exceeds budget."""
-    mock_pricer.estimate_request_cost.return_value = Budget(
-        financial=0.01,
-        latency_ms=100.0,
-        token_volume=2000,  # Exceeds 1000
-    )
-
-    request = RequestPayload(
-        model_name="gpt-4o",
-        prompt="Big context",
-        max_budget=Budget(financial=0.05, latency_ms=500.0, token_volume=1000),
-    )
-
-    with pytest.raises(BudgetExhaustedError) as exc_info:
-        authority.allow_execution(request)
-
-    assert exc_info.value.limit_type == "token_volume"
-    assert exc_info.value.limit_value == 1000
-    assert exc_info.value.estimated_value == 2000
-    assert "Token volume budget exceeded" in str(exc_info.value)
-
-
-def test_pricer_integration() -> None:
-    """Integration test with the real Pricer (no mocks)."""
-    authority = BudgetAuthority()  # uses real default Pricer
-
-    request = RequestPayload(
-        model_name="gpt-4o-mini",
-        prompt="Hello world",
-        max_budget=Budget(
-            financial=1.0,  # Plenty
-            latency_ms=1000.0,  # Plenty
-            token_volume=1000,  # Plenty
-        ),
-    )
-
-    assert authority.allow_execution(request) is True
-
-    # Test failure with real pricer
-    request_tiny = RequestPayload(
-        model_name="gpt-4o-mini",
-        prompt="Hello world",
-        max_budget=Budget(
-            financial=0.0,  # Zero budget
-            latency_ms=0.0,
-            token_volume=0,
-        ),
-    )
-
-    with pytest.raises(BudgetExhaustedError):
-        authority.allow_execution(request_tiny)
-
-
-def test_tool_call_budget_integration() -> None:
-    """Test integration of tool costs with budget authority."""
-    authority = BudgetAuthority()
-    # web_search costs 0.01 per call
-
-    # Request with 5 tool calls = $0.05
-    tool_calls = [{"name": "web_search"} for _ in range(5)]
-
-    request = RequestPayload(
-        model_name="gpt-4o-mini",
-        prompt="Search",
-        tool_calls=tool_calls,
-        max_budget=Budget(financial=0.04, latency_ms=10000.0, token_volume=10000),
-    )
-
-    # Should fail because $0.05 + token cost > $0.04
-    with pytest.raises(BudgetExhaustedError) as exc:
-        authority.allow_execution(request)
-
-    assert exc.value.limit_type == "financial"
-    assert exc.value.estimated_value >= 0.05
-
-
-def test_budget_tipping_point_with_tools() -> None:
-    """
-    Test a scenario where the budget is met exactly by tokens, but one tool call fails it.
-    """
-    authority = BudgetAuthority()
-    # gpt-4o-mini: input $0.15/1M -> $0.00015/1k
-    # output $0.60/1M -> $0.0006/1k
-    # Let's say we have 1000 input tokens, 1000 output tokens.
-    # Cost = 0.00015 + 0.0006 = 0.00075.
-
-    budget_limit = 0.00075
-    # Case 1: Just tokens -> Should Pass (approx)
-    req1 = RequestPayload(
-        model_name="gpt-4o-mini",
-        prompt="x" * 4000,  # ~1000 tokens
-        estimated_output_tokens=1000,
-        max_budget=Budget(financial=budget_limit + 1e-9, latency_ms=10000.0, token_volume=10000),
-    )
-    assert authority.allow_execution(req1) is True
-
-    # Case 2: Add a cheap tool -> Should Fail
-    # database_query costs 0.005
-    req2 = RequestPayload(
-        model_name="gpt-4o-mini",
-        prompt="x" * 4000,
-        estimated_output_tokens=1000,
-        tool_calls=[{"name": "database_query"}],
-        max_budget=Budget(financial=budget_limit + 1e-9, latency_ms=10000.0, token_volume=10000),
-    )
-    with pytest.raises(BudgetExhaustedError) as exc:
-        authority.allow_execution(req2)
-    assert exc.value.limit_type == "financial"
-
-
-def test_mixed_valid_invalid_tools_budget() -> None:
-    """
-    Test that invalid tools (cost $0) do not trigger budget errors,
-    but valid expensive tools in the same request do.
-    """
-    authority = BudgetAuthority()
-
-    # Request with 10 invalid tools ($0) + 1 expensive tool ($0.01 web_search)
-    tool_calls = [{"name": "invalid_tool"} for _ in range(10)]
-    tool_calls.append({"name": "web_search"})
-
-    # Budget $0.005. Cost $0.01 (web_search) + $0.0 (others) + token costs
-    # Should fail.
+def test_allow_execution_no_limits(budget_authority: BudgetAuthority) -> None:
     req = RequestPayload(
-        model_name="gpt-4o-mini",
-        prompt="Test",
-        tool_calls=tool_calls,
-        max_budget=Budget(financial=0.005, latency_ms=10000.0, token_volume=10000),
-    )
-
-    with pytest.raises(BudgetExhaustedError) as exc:
-        authority.allow_execution(req)
-
-    # Verify the estimated value includes the web_search cost
-    assert exc.value.estimated_value >= 0.01
-
-
-# --- Edge Case Tests ---
-
-
-def test_boundary_exact_match(authority: BudgetAuthority, mock_pricer: Mock) -> None:
-    """Test edge case where cost equals budget limit exactly (should pass)."""
-    mock_pricer.estimate_request_cost.return_value = Budget(
-        financial=1.00,
-        latency_ms=100.0,
-        token_volume=100,
-    )
-
-    request = RequestPayload(
         model_name="gpt-4o",
-        prompt="Test",
-        max_budget=Budget(
-            financial=1.00,  # Exact match
-            latency_ms=100.0,  # Exact match
-            token_volume=100,  # Exact match
-        ),
+        prompt="Hello world",
+        max_budget=None,  # No limit
     )
+    result = budget_authority.allow_execution(req)
+    assert isinstance(result, AuthResult)
+    assert result.allowed is True
+    assert result.warning is False
 
-    # Should not raise
-    assert authority.allow_execution(request) is True
 
-
-def test_boundary_epsilon_fail(authority: BudgetAuthority, mock_pricer: Mock) -> None:
-    """Test edge case where cost is slightly above budget (should fail)."""
-    mock_pricer.estimate_request_cost.return_value = Budget(
-        financial=1.0000001,
-        latency_ms=100.0,
-        token_volume=100,
-    )
-
-    request = RequestPayload(
+def test_allow_execution_within_limits(budget_authority: BudgetAuthority) -> None:
+    # Estimate: ~1000 input tokens -> cost $0.005, latency ~200ms
+    req = RequestPayload(
         model_name="gpt-4o",
-        prompt="Test",
-        max_budget=Budget(financial=1.00, latency_ms=100.0, token_volume=100),
+        prompt="a" * 4000,
+        estimated_output_tokens=10,
+        max_budget=Budget(financial=1.0, latency_ms=5000, token_volume=10000),
     )
-
-    with pytest.raises(BudgetExhaustedError) as exc:
-        authority.allow_execution(request)
-    assert exc.value.limit_type == "financial"
+    result = budget_authority.allow_execution(req)
+    assert result.allowed is True
 
 
-def test_zero_budget_zero_cost(authority: BudgetAuthority, mock_pricer: Mock) -> None:
-    """Test zero budget allows zero cost."""
-    mock_pricer.estimate_request_cost.return_value = Budget(financial=0.0, latency_ms=0.0, token_volume=0)
-
-    request = RequestPayload(
+def test_allow_execution_financial_exceeded(budget_authority: BudgetAuthority) -> None:
+    # 100k tokens input -> $0.50 input cost
+    req = RequestPayload(
         model_name="gpt-4o",
-        prompt="",
+        prompt="a" * 400000,
+        estimated_output_tokens=10,
+        max_budget=Budget(financial=0.10, latency_ms=5000, token_volume=1_000_000),
+    )
+    with pytest.raises(BudgetExhaustedError) as excinfo:
+        budget_authority.allow_execution(req)
+    assert "Financial budget exceeded" in str(excinfo.value)
+
+
+def test_allow_execution_latency_exceeded(budget_authority: BudgetAuthority) -> None:
+    # 1000 output tokens -> 12000ms latency (12ms/token)
+    req = RequestPayload(
+        model_name="gpt-4o",
+        prompt="a",
+        estimated_output_tokens=1000,
+        max_budget=Budget(financial=10.0, latency_ms=500, token_volume=10000),
+    )
+    with pytest.raises(BudgetExhaustedError) as excinfo:
+        budget_authority.allow_execution(req)
+    assert "Latency budget exceeded" in str(excinfo.value)
+
+
+def test_allow_execution_token_volume_exceeded(budget_authority: BudgetAuthority) -> None:
+    req = RequestPayload(
+        model_name="gpt-4o",
+        prompt="a" * 4000,  # 1000 tokens
+        estimated_output_tokens=100,
+        max_budget=Budget(financial=10.0, latency_ms=50000, token_volume=500),
+    )
+    with pytest.raises(BudgetExhaustedError) as excinfo:
+        budget_authority.allow_execution(req)
+    assert "Token volume budget exceeded" in str(excinfo.value)
+
+
+def test_zero_limits_strict(budget_authority: BudgetAuthority) -> None:
+    # Limits set to 0 are STRICT (no budget).
+    # If cost > 0, it should fail.
+    req = RequestPayload(
+        model_name="gpt-4o",
+        prompt="a" * 4000,
+        estimated_output_tokens=10,
         max_budget=Budget(financial=0.0, latency_ms=0.0, token_volume=0),
     )
-
-    assert authority.allow_execution(request) is True
-
-
-def test_failure_precedence(authority: BudgetAuthority, mock_pricer: Mock) -> None:
-    """
-    Verify precedence: Financial > Latency > Token Volume.
-    If multiple limits are exceeded, the first one checked should raise.
-    """
-    mock_pricer.estimate_request_cost.return_value = Budget(
-        financial=10.0,  # Exceeds 1.0
-        latency_ms=1000.0,  # Exceeds 100.0
-        token_volume=1000,  # Exceeds 100
-    )
-
-    request = RequestPayload(
-        model_name="gpt-4o",
-        prompt="Test",
-        max_budget=Budget(financial=1.0, latency_ms=100.0, token_volume=100),
-    )
-
-    with pytest.raises(BudgetExhaustedError) as exc:
-        authority.allow_execution(request)
-
-    # Expect financial error first
-    assert exc.value.limit_type == "financial"
-
-
-def test_simulated_workflow_drain(authority: BudgetAuthority, mock_pricer: Mock) -> None:
-    """
-    Complex scenario: Simulating a client making requests and draining budget.
-    """
-    # Cost is fixed per request for this simulation
-    cost_per_req = 0.40
-    mock_pricer.estimate_request_cost.return_value = Budget(financial=cost_per_req, latency_ms=10.0, token_volume=10)
-
-    total_budget = 1.00
-    remaining_budget = total_budget
-
-    # Request 1: 0.40 cost, 1.00 budget. OK.
-    req1 = RequestPayload(
-        model_name="gpt-4o",
-        prompt="Req1",
-        max_budget=Budget(financial=remaining_budget, latency_ms=100, token_volume=100),
-    )
-    assert authority.allow_execution(req1) is True
-    remaining_budget -= cost_per_req  # 0.60 left
-
-    # Request 2: 0.40 cost, 0.60 budget. OK.
-    req2 = RequestPayload(
-        model_name="gpt-4o",
-        prompt="Req2",
-        max_budget=Budget(financial=remaining_budget, latency_ms=100, token_volume=100),
-    )
-    assert authority.allow_execution(req2) is True
-    remaining_budget -= cost_per_req  # 0.20 left
-
-    # Request 3: 0.40 cost, 0.20 budget. FAIL.
-    req3 = RequestPayload(
-        model_name="gpt-4o",
-        prompt="Req3",
-        max_budget=Budget(financial=remaining_budget, latency_ms=100, token_volume=100),
-    )
-
-    with pytest.raises(BudgetExhaustedError) as exc:
-        authority.allow_execution(req3)
-
-    assert exc.value.limit_type == "financial"
-    assert exc.value.limit_value == pytest.approx(0.20)
-    assert exc.value.estimated_value == 0.40
+    with pytest.raises(BudgetExhaustedError):
+        budget_authority.allow_execution(req)

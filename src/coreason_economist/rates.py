@@ -55,6 +55,11 @@ DEFAULT_MODEL_RATES: Dict[str, ModelRate] = {
         output_cost_per_1k=0.015,  # $15.00 / 1M
         latency_ms_per_output_token=15.0,  # Slower than GPT-4o
     ),
+    "llama-3.1-70b": ModelRate(
+        input_cost_per_1k=0.00088,  # $0.88 / 1M (Based on Together AI pricing)
+        output_cost_per_1k=0.00088,  # $0.88 / 1M (Based on Together AI pricing)
+        latency_ms_per_output_token=10.0,  # Fast inference
+    ),
 }
 
 # Default tool rates

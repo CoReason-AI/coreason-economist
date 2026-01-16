@@ -40,7 +40,9 @@ def test_arbitrageur_boundary_condition(mock_rates: Dict[str, ModelRate]) -> Non
     Test Arbitrageur behavior when difficulty_score exactly equals threshold.
     It should NOT recommend a change (trust the caller at threshold).
     """
-    arb = Arbitrageur(rates=mock_rates, threshold=0.5)
+    # Refactor: Inject Pricer instead of passing rates directly
+    pricer = Pricer(rates=mock_rates)
+    arb = Arbitrageur(pricer=pricer, threshold=0.5)
     # Score 0.5 == Threshold 0.5 -> Should be treated as "hard enough" -> Return None
     payload = RequestPayload(model_name="gpt-4", prompt="test", difficulty_score=0.5)
 
@@ -70,7 +72,8 @@ def test_arbitrageur_equal_cost(mock_rates: Dict[str, ModelRate]) -> None:
         "model-a": ModelRate(input_cost_per_1k=1.0, output_cost_per_1k=1.0, latency_ms_per_output_token=1.0),
         "model-b": ModelRate(input_cost_per_1k=1.0, output_cost_per_1k=1.0, latency_ms_per_output_token=1.0),
     }
-    arb = Arbitrageur(rates=rates_equal, threshold=0.5)
+    pricer_equal = Pricer(rates=rates_equal)
+    arb = Arbitrageur(pricer=pricer_equal, threshold=0.5)
 
     # Current is model-a. Cheapest is model-a (or b).
     # Cost index is equal. Logic says `if cheapest < current`. 2.0 < 2.0 is False.
@@ -164,7 +167,7 @@ def test_integrated_expensive_council_rejection(mock_rates: Dict[str, ModelRate]
         agent_count=1,
         rounds=1,
     )
-    assert authority.allow_execution(req_single) is True
+    assert authority.allow_execution(req_single).allowed is True
 
     # Council Request (5 agents) -> $3.0 * 5 = $15.0 > $10.0 -> Should Fail
     req_council = RequestPayload(

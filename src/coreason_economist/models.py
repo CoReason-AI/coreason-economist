@@ -11,7 +11,7 @@
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 class Decision(str, Enum):
@@ -62,11 +62,18 @@ class RequestPayload(BaseModel):
     )
     agent_count: int = Field(1, description="Number of agents participating", ge=1)
     rounds: int = Field(1, description="Number of rounds of execution", ge=1)
+    quality_warning: Optional[str] = Field(
+        None, description="Warning if the request was downgraded or modified to fit budget"
+    )
+    soft_limit_threshold: float = Field(
+        0.8, description="Usage threshold (0.0 to 1.0) to trigger a warning", ge=0.0, le=1.0
+    )
 
 
 class EconomicTrace(BaseModel):
     """
     Log object for every transaction.
+    Includes computed efficiency metrics for dashboard observability.
     """
 
     estimated_cost: Budget = Field(..., description="Estimated cost before execution")
@@ -78,6 +85,81 @@ class EconomicTrace(BaseModel):
     suggested_alternative: Optional[RequestPayload] = Field(
         None, description="Alternative configuration suggested by Arbitrageur"
     )
+    input_tokens: int = Field(..., description="Number of input tokens used for estimation", ge=0)
+    budget_warning: bool = Field(False, description="True if budget soft limit was exceeded")
+    warning_message: Optional[str] = Field(None, description="Details of soft limit warning")
+
+    @property
+    def _effective_cost(self) -> Budget:
+        """Internal helper to get the cost used for metrics (Actual > Estimated)."""
+        return self.actual_cost if self.actual_cost else self.estimated_cost
+
+    @computed_field(return_type=float)  # type: ignore[misc]
+    @property
+    def tokens_per_dollar(self) -> float:
+        """
+        Calculates financial efficiency: Total Tokens / Financial Cost.
+        """
+        cost = self._effective_cost
+        if cost.financial <= 0:
+            return 0.0
+        return float(cost.token_volume) / cost.financial
+
+    @computed_field(return_type=float)  # type: ignore[misc]
+    @property
+    def tokens_per_second(self) -> float:
+        """
+        Calculates speed efficiency: Total Tokens / (Latency ms / 1000).
+        """
+        cost = self._effective_cost
+        if cost.latency_ms <= 0:
+            return 0.0
+        seconds = cost.latency_ms / 1000.0
+        return float(cost.token_volume) / seconds
+
+    @computed_field(return_type=float)  # type: ignore[misc]
+    @property
+    def latency_per_token(self) -> float:
+        """
+        Calculates latency per token: Latency ms / Total Tokens.
+        """
+        cost = self._effective_cost
+        if cost.token_volume <= 0:
+            return 0.0
+        return cost.latency_ms / float(cost.token_volume)
+
+    @computed_field(return_type=float)  # type: ignore[misc]
+    @property
+    def cost_per_insight(self) -> float:
+        """
+        Exposes the raw financial cost as 'Cost per Insight' for dashboarding.
+        Returns the financial cost of the transaction (Actual > Estimated).
+        """
+        return self._effective_cost.financial
+
+
+class AuthResult(BaseModel):
+    """
+    Result returned by the Budget Authority.
+    """
+
+    allowed: bool = Field(..., description="Whether the request is allowed")
+    warning: bool = Field(False, description="Whether a soft limit warning was triggered")
+    message: Optional[str] = Field(None, description="Warning or error message")
+
+    model_config = ConfigDict(frozen=True)
+
+
+class CalibrationResult(BaseModel):
+    """
+    Result of the reconciliation process, including budget variance and heuristic updates.
+    """
+
+    variance: BudgetVariance = Field(..., description="Difference between actual and estimated budget")
+    observed_multiplier: float = Field(..., description="Actual output/input ratio observed", ge=0.0)
+    recommended_multiplier: float = Field(..., description="Recommended value for heuristic multiplier", ge=0.0)
+
+    model_config = ConfigDict(frozen=True)
 
 
 class VOCDecision(str, Enum):
