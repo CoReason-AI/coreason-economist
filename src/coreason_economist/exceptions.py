@@ -8,9 +8,14 @@
 #
 # Source Code: https://github.com/CoReason-AI/coreason_economist
 
-from coreason_economist.utils.logger import logger
 
+class BudgetExhaustedError(Exception):
+    """
+    Raised when a request exceeds the allocated budget.
+    """
 
-def hello_world() -> str:
-    logger.info("Hello World!")
-    return "Hello World!"
+    def __init__(self, message: str, limit_type: str, limit_value: float, estimated_value: float) -> None:
+        super().__init__(message)
+        self.limit_type = limit_type
+        self.limit_value = limit_value
+        self.estimated_value = estimated_value
