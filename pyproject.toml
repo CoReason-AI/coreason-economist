@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "coreason_economist"
-version = "0.1.0"
+version = "0.2.0"
 description = "is it worth thinking?"
 authors = ["Gowtham A Rao <gowtham.rao@coreason.ai>"]
 license = "Prosperity-3.0"
@@ -27,10 +27,10 @@ build-backend = "poetry.core.masonry.api"
 
 [project]
 name = "coreason_economist"
-version = "0.1.0"
+version = "0.2.0"
 description = "is it worth thinking?"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [
     { name = "Gowtham A Rao", email = "gowtham.rao@coreason.ai" },
 ]
