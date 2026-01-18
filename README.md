@@ -4,7 +4,13 @@
 
 The Cognitive "CFO" and Optimization Engine for the CoReason platform.
 
+[![License: Prosperity 3.0](https://img.shields.io/badge/license-Prosperity%203.0-blue)](https://prosperitylicense.com/versions/3.0.0)
+[![Python Versions](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue)](https://pypi.org/project/coreason-economist/)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 [![CI](https://github.com/CoReason-AI/coreason_economist/actions/workflows/ci.yml/badge.svg)](https://github.com/CoReason-AI/coreason_economist/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/CoReason-AI/coreason_economist/graph/badge.svg?token=placeholder)](https://codecov.io/gh/CoReason-AI/coreason_economist)
+[![Docs](https://img.shields.io/badge/docs-mkdocs-blue)](https://coreason-ai.github.io/coreason_economist/)
 
 ## Overview
 
