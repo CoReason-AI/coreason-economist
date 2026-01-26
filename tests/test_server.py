@@ -6,6 +6,7 @@ import pytest
 from coreason_economist.database import BudgetAccount, get_db
 from coreason_economist.server import app
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import SQLAlchemyError
 
 
 @pytest.fixture  # type: ignore[misc]
@@ -120,7 +121,7 @@ def test_voc_analyze(client: TestClient) -> None:
     assert data["max_allowable_cost"] > 0
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio  # type: ignore[misc]
 async def test_get_db() -> None:
     # Mock AsyncSessionLocal to return a mock session
     mock_session_local = MagicMock()
@@ -143,3 +144,86 @@ async def test_get_db() -> None:
 
         # Verify __aexit__ was called (session closed)
         assert mock_session_local.return_value.__aexit__.called
+
+
+# Edge Case Tests
+
+
+def test_authorize_exact_balance(client: TestClient, mock_session: AsyncMock) -> None:
+    # Verify we can spend the last penny
+    mock_account = BudgetAccount(project_id="p1", balance=Decimal("1.0"))
+    mock_session.execute.return_value.scalar_one_or_none.return_value = mock_account
+
+    response = client.post("/budget/authorize", json={"project_id": "p1", "estimated_cost": 1.0})
+
+    assert response.status_code == 200
+    assert mock_account.balance == Decimal("0.0")
+
+
+def test_authorize_validation_error(client: TestClient) -> None:
+    # Cost <= 0 should be rejected by Pydantic model
+    response = client.post("/budget/authorize", json={"project_id": "p1", "estimated_cost": 0.0})
+    assert response.status_code == 422
+
+    response = client.post("/budget/authorize", json={"project_id": "p1", "estimated_cost": -1.0})
+    assert response.status_code == 422
+
+
+def test_commit_calculations_weird_values(client: TestClient, mock_session: AsyncMock) -> None:
+    # Test refund logic with unusual values
+    mock_account = BudgetAccount(project_id="p1", balance=Decimal("10.0"))
+    mock_session.execute.return_value.scalar_one_or_none.return_value = mock_account
+
+    # Actual cost higher than estimated (negative refund)
+    # This implies we under-reserved. Logic should subtract the difference (add negative refund).
+    # Est: 1.0, Actual: 2.0 -> Refund: -1.0. Balance: 10 + (-1) = 9.
+    response = client.post("/budget/commit", json={"project_id": "p1", "estimated_cost": 1.0, "actual_cost": 2.0})
+
+    assert response.status_code == 200
+    assert response.json()["refund"] == -1.0
+    assert mock_account.balance == Decimal("9.0")
+
+
+def test_database_error_handling(client: TestClient, mock_session: AsyncMock) -> None:
+    # Simulate DB error during execution
+    mock_session.execute.side_effect = SQLAlchemyError("DB Boom")
+
+    with pytest.raises(SQLAlchemyError):
+        # We expect the exception to bubble up or be handled by FastAPI's default handler (500)
+        # Since we haven't added a custom exception handler in server.py, TestClient might see the raw exception
+        # or a 500 depending on configuration. TestClient usually raises the exception.
+        client.post("/budget/authorize", json={"project_id": "p1", "estimated_cost": 1.0})
+
+
+def test_complex_budget_lifecycle(client: TestClient, mock_session: AsyncMock) -> None:
+    """
+    Simulates a sequential workflow:
+    1. Start with 10.0
+    2. Reserve 5.0 (Bal -> 5.0)
+    3. Commit with Actual 3.0 (Refund 2.0 -> Bal 7.0)
+    4. Reserve 6.0 (Bal -> 1.0)
+    5. Try Reserve 2.0 (Fail)
+    """
+    mock_account = BudgetAccount(project_id="p1", balance=Decimal("10.0"))
+    mock_session.execute.return_value.scalar_one_or_none.return_value = mock_account
+
+    # Step 2: Reserve 5.0
+    resp1 = client.post("/budget/authorize", json={"project_id": "p1", "estimated_cost": 5.0})
+    assert resp1.status_code == 200
+    assert mock_account.balance == Decimal("5.0")
+
+    # Step 3: Commit (Est 5, Act 3 -> Refund 2)
+    resp2 = client.post("/budget/commit", json={"project_id": "p1", "estimated_cost": 5.0, "actual_cost": 3.0})
+    assert resp2.status_code == 200
+    assert resp2.json()["refund"] == 2.0
+    assert mock_account.balance == Decimal("7.0")
+
+    # Step 4: Reserve 6.0
+    resp3 = client.post("/budget/authorize", json={"project_id": "p1", "estimated_cost": 6.0})
+    assert resp3.status_code == 200
+    assert mock_account.balance == Decimal("1.0")
+
+    # Step 5: Try Reserve 2.0 (Fail)
+    resp4 = client.post("/budget/authorize", json={"project_id": "p1", "estimated_cost": 2.0})
+    assert resp4.status_code == 402
+    assert "Insufficient funds" in resp4.json()["detail"]
