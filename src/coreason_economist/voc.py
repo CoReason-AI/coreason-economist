@@ -138,3 +138,32 @@ class VOCEngine:
             score=similarity,
             reason=f"Significant change detected. Similarity {similarity:.4f} < threshold {effective_thresh:.4f}.",
         )
+
+    def assess_viability(self, task_complexity: float, current_uncertainty: float) -> tuple[bool, float]:
+        """
+        Assess if the task is worth executing based on complexity and uncertainty.
+        Returns (should_execute, max_allowable_cost).
+        """
+        # Heuristic: High uncertainty requires higher potential value (or budget) to resolve.
+        # But extremely high uncertainty + high complexity might be a money sink.
+
+        # Base allowable cost for a standard task
+        base_budget = 0.10
+
+        # Complexity multiplier: More complex tasks need more budget
+        # range: 1.0 to 2.0
+        complexity_multiplier = 1.0 + task_complexity
+
+        # Uncertainty penalty/bonus?
+        # If uncertainty is low, we are confident, budget is predictable.
+        # If uncertainty is high, we might need more rounds (higher budget) OR we might abort.
+        # Let's assume we allow more budget to reduce uncertainty, up to a point.
+        uncertainty_multiplier = 1.0 + (current_uncertainty * 0.5)
+
+        max_allowable_cost = base_budget * complexity_multiplier * uncertainty_multiplier
+
+        # Decision threshold
+        # If complexity > 0.9 AND uncertainty > 0.9, it's too risky/expensive.
+        should_execute = not (task_complexity > 0.9 and current_uncertainty > 0.9)
+
+        return should_execute, max_allowable_cost
