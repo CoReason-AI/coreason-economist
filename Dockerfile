@@ -35,3 +35,13 @@ COPY --from=builder /wheels /wheels
 
 # Install the application wheel
 RUN pip install --no-cache-dir /wheels/*.whl
+
+# Expose port
+EXPOSE 8000
+
+# Environment Variables
+ENV DATABASE_URL=""
+ENV INITIAL_BUDGET_TIER="5.0"
+
+# Command
+CMD ["uvicorn", "coreason_economist.server:app", "--host", "0.0.0.0", "--port", "8000"]
