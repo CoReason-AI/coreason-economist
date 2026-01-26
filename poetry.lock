@@ -1808,6 +1808,30 @@ shellingham = ">=1.3.0"
 typing-extensions = ">=3.7.4.3"
 
 [[package]]
+name = "types-python-dateutil"
+version = "2.9.0.20260124"
+description = "Typing stubs for python-dateutil"
+optional = false
+python-versions = ">=3.9"
+groups = ["dev"]
+files = [
+    {file = "types_python_dateutil-2.9.0.20260124-py3-none-any.whl", hash = "sha256:f802977ae08bf2260142e7ca1ab9d4403772a254409f7bbdf652229997124951"},
+    {file = "types_python_dateutil-2.9.0.20260124.tar.gz", hash = "sha256:7d2db9f860820c30e5b8152bfe78dbdf795f7d1c6176057424e8b3fdd1f581af"},
+]
+
+[[package]]
+name = "types-sqlalchemy"
+version = "1.4.53.38"
+description = "Typing stubs for SQLAlchemy"
+optional = false
+python-versions = "*"
+groups = ["dev"]
+files = [
+    {file = "types-SQLAlchemy-1.4.53.38.tar.gz", hash = "sha256:5bb7463537e04e1aa5a3557eb725930df99226dcfd3c9bf93008025bfe5c169e"},
+    {file = "types_SQLAlchemy-1.4.53.38-py3-none-any.whl", hash = "sha256:7e60e74f823931cc9a9e8adb0a4c05e5533e6708b8a266807893a739faf4eaaa"},
+]
+
+[[package]]
 name = "typing-extensions"
 version = "4.15.0"
 description = "Backported and Experimental Type Hints for Python 3.9+"
@@ -2219,4 +2243,4 @@ dev = ["black (>=19.3b0) ; python_version >= \"3.6\"", "pytest (>=4.6.2)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12, <3.15"
-content-hash = "c98524b5a93db79f017a15a7a7d73a3c894c1309ba6b2fc059c05cf167c51736"
+content-hash = "f22e2571b6776f47dac6c0fe7e53efb119da3905a6dfc44b004378f8a2e13a2b"
