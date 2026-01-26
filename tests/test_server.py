@@ -1,6 +1,6 @@
 from decimal import Decimal
 from typing import AsyncGenerator
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from coreason_economist.database import BudgetAccount, get_db
@@ -100,9 +100,46 @@ def test_commit_budget(client: TestClient, mock_session: AsyncMock) -> None:
     assert mock_account.balance == Decimal("9.6")
 
 
+def test_commit_budget_not_found(client: TestClient, mock_session: AsyncMock) -> None:
+    # Mock account not found
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_session.execute.return_value = mock_result
+
+    response = client.post("/budget/commit", json={"project_id": "p1", "estimated_cost": 0.5, "actual_cost": 0.4})
+
+    assert response.status_code == 404
+    assert "Account not found" in response.json()["detail"]
+
+
 def test_voc_analyze(client: TestClient) -> None:
     response = client.post("/voc/analyze", json={"task_complexity": 0.5, "current_uncertainty": 0.2})
     assert response.status_code == 200
     data = response.json()
     assert data["should_execute"] is True
     assert data["max_allowable_cost"] > 0
+
+
+@pytest.mark.asyncio
+async def test_get_db() -> None:
+    # Mock AsyncSessionLocal to return a mock session
+    mock_session_local = MagicMock()
+    mock_session_instance = AsyncMock()
+
+    # Setup the context manager of AsyncSessionLocal
+    mock_session_local.return_value.__aenter__.return_value = mock_session_instance
+
+    # Patch the AsyncSessionLocal in coreason_economist.database
+    with patch("coreason_economist.database.AsyncSessionLocal", mock_session_local):
+        gen = get_db()
+        session = await anext(gen)
+        assert session == mock_session_instance
+
+        # Verify closure (via generator exit)
+        try:
+            await anext(gen)
+        except StopAsyncIteration:
+            pass
+
+        # Verify __aexit__ was called (session closed)
+        assert mock_session_local.return_value.__aexit__.called
