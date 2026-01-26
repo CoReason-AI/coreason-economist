@@ -189,3 +189,40 @@ class VOCResult(BaseModel):
     reason: str = Field(..., description="Explanation for the decision")
 
     model_config = ConfigDict(frozen=True)
+
+
+class AuthorizeRequest(BaseModel):
+    """Payload for budget authorization."""
+
+    project_id: str = Field(..., description="Unique identifier for the project")
+    estimated_cost: float = Field(..., gt=0.0, description="Estimated financial cost to reserve")
+
+
+class AuthorizeResponse(BaseModel):
+    """Response for budget authorization."""
+
+    authorized: bool = Field(..., description="Whether the budget was authorized")
+    transaction_id: Optional[str] = Field(None, description="Transaction ID if authorized")
+    message: Optional[str] = Field(None, description="Error message if not authorized")
+
+
+class CommitRequest(BaseModel):
+    """Payload for budget settlement."""
+
+    project_id: str = Field(..., description="Unique identifier for the project")
+    estimated_cost: float = Field(..., description="Original estimated cost reserved")
+    actual_cost: float = Field(..., description="Actual cost incurred")
+
+
+class VocAnalyzeRequest(BaseModel):
+    """Payload for VoC analysis."""
+
+    task_complexity: float = Field(..., ge=0.0, le=1.0, description="Complexity of the task")
+    current_uncertainty: float = Field(..., ge=0.0, le=1.0, description="Current uncertainty or ambiguity")
+
+
+class VocAnalyzeResponse(BaseModel):
+    """Response for VoC analysis."""
+
+    should_execute: bool = Field(..., description="Recommendation to execute or not")
+    max_allowable_cost: float = Field(..., description="Maximum budget allowed based on VoC")
