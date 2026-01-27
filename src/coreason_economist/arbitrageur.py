@@ -10,6 +10,8 @@
 
 from typing import Any, Dict, Optional
 
+from coreason_identity.models import UserContext
+
 from coreason_economist.models import Budget, RequestPayload
 from coreason_economist.pricer import Pricer
 from coreason_economist.rates import ModelRate
@@ -71,7 +73,9 @@ class Arbitrageur:
             return False
         return True
 
-    def recommend_alternative(self, request: RequestPayload) -> Optional[RequestPayload]:
+    def recommend_alternative(
+        self, request: RequestPayload, user_context: Optional[UserContext] = None
+    ) -> Optional[RequestPayload]:
         """
         Analyzes the request and recommends a cheaper model if appropriate.
 
@@ -82,6 +86,16 @@ class Arbitrageur:
         # If the requested model is unknown, we can't estimate prices or compare.
         if request.model_name not in self.rates:
             return None
+
+        # Determine user tier settings
+        effective_threshold = self.threshold
+        disable_downgrades = False
+        if user_context and user_context.groups:
+            groups = set(user_context.groups)
+            if {"Premium", "Enterprise"} & groups:
+                disable_downgrades = True
+            elif {"Free", "Student"} & groups:
+                effective_threshold = 0.8
 
         # Calculate current cost
         current_cost = self.pricer.estimate_request_cost(
@@ -164,7 +178,12 @@ class Arbitrageur:
         # STRATEGY 2: Standard Arbitrage (Low Difficulty Optimization)
         # Logic: If task is easy, optimize for savings, even if budget is not strictly exceeded
         # (or if we already found a fitting solution but can optimize further).
-        if request.difficulty_score is not None and request.difficulty_score < self.threshold:
+        # Premium/Enterprise users skip this (unless budget was exceeded, handled in Strategy 1).
+        should_optimize = not disable_downgrades and (
+            request.difficulty_score is not None and request.difficulty_score < effective_threshold
+        )
+
+        if should_optimize:
             # Determine baseline for comparison.
             # If we already have updates, we should compare against the updated config?
             # Actually, standard arbitrage logic compares original request model vs cheapest.
