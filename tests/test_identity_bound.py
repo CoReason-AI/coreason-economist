@@ -170,9 +170,11 @@ async def test_authorize_existing_project_admin_override(mock_session: AsyncMock
     assert response.json()["authorized"] is True
 
 
-def test_get_user_context_raises_401_if_not_overridden() -> None:
+def test_get_user_context_raises_401_if_not_overridden(mock_session: AsyncMock) -> None:
     # Verify default dependency raises 401
     app.dependency_overrides.clear()
+    # Ensure get_db is still overridden to avoid DB connection issues
+    app.dependency_overrides[get_db] = lambda: mock_session
     with TestClient(app) as client:
         response = client.post("/budget/authorize", json={"project_id": "p", "estimated_cost": 1})
         assert response.status_code == 401
