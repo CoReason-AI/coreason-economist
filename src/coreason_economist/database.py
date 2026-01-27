@@ -28,6 +28,7 @@ class BudgetAccount(Base):
     __tablename__ = "budget_accounts"
 
     project_id: Mapped[str] = mapped_column(String, primary_key=True)
+    owner_id: Mapped[str] = mapped_column(String, nullable=True)
     balance: Mapped[Decimal] = mapped_column(Numeric(10, 4))
     currency: Mapped[str] = mapped_column(String, default="USD")
     last_updated: Mapped[datetime] = mapped_column(
