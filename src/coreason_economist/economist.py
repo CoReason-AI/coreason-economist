@@ -62,9 +62,7 @@ class Economist:
 
         self.voc_engine = voc_engine if voc_engine is not None else VOCEngine()
 
-    def check_execution(
-        self, request: RequestPayload, user_context: Optional[UserContext] = None
-    ) -> EconomicTrace:
+    def check_execution(self, request: RequestPayload, user_context: Optional[UserContext] = None) -> EconomicTrace:
         """
         Evaluates a request against the budget and returns an execution decision.
 

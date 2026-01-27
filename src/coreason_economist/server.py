@@ -2,6 +2,7 @@ import uuid
 from decimal import Decimal
 from typing import Annotated, Any, Dict
 
+from coreason_identity.models import UserContext
 from fastapi import Depends, FastAPI, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +16,6 @@ from coreason_economist.models import (
     VocAnalyzeResponse,
 )
 from coreason_economist.voc import VOCEngine
-from coreason_identity.models import UserContext
 
 app = FastAPI(title="Cost Control Microservice")
 
@@ -60,9 +60,7 @@ async def authorize_budget(
             # Ownership Check
             is_admin = "Admin" in (user_context.groups or [])
             if account.owner_id != user_context.user_id and not is_admin:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN, detail="You do not own this project budget."
-                )
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not own this project budget.")
 
         cost = Decimal(str(request.estimated_cost))
         if account.balance < cost:
@@ -77,9 +75,7 @@ async def authorize_budget(
 
 
 @app.post("/budget/commit")  # type: ignore[misc]
-async def commit_budget(
-    request: CommitRequest, session: SessionDep, user_context: UserContextDep
-) -> Dict[str, Any]:
+async def commit_budget(request: CommitRequest, session: SessionDep, user_context: UserContextDep) -> Dict[str, Any]:
     async with session.begin():
         stmt = select(BudgetAccount).where(BudgetAccount.project_id == request.project_id).with_for_update()
         result = await session.execute(stmt)
