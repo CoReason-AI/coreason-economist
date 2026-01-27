@@ -10,6 +10,8 @@
 
 from typing import Optional
 
+from coreason_identity.models import UserContext
+
 from coreason_economist.arbitrageur import Arbitrageur
 from coreason_economist.budget_authority import BudgetAuthority
 from coreason_economist.calibration import calculate_budget_variance
@@ -60,7 +62,7 @@ class Economist:
 
         self.voc_engine = voc_engine if voc_engine is not None else VOCEngine()
 
-    def check_execution(self, request: RequestPayload) -> EconomicTrace:
+    def check_execution(self, request: RequestPayload, user_context: Optional[UserContext] = None) -> EconomicTrace:
         """
         Evaluates a request against the budget and returns an execution decision.
 
@@ -98,7 +100,7 @@ class Economist:
 
         except BudgetExhaustedError as e:
             # 3. Handle Rejection
-            suggestion = self.arbitrageur.recommend_alternative(request)
+            suggestion = self.arbitrageur.recommend_alternative(request, user_context=user_context)
 
             return EconomicTrace(
                 estimated_cost=estimated_cost,

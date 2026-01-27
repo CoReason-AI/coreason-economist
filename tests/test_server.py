@@ -4,7 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from coreason_economist.database import BudgetAccount, get_db
-from coreason_economist.server import app
+from coreason_economist.server import app, get_user_context
+from coreason_identity.models import UserContext
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -34,7 +35,11 @@ def client(mock_session: AsyncMock) -> TestClient:
     async def override_get_db() -> AsyncGenerator[AsyncMock, None]:
         yield mock_session
 
+    async def override_get_user_context() -> UserContext:
+        return UserContext(user_id="admin_user", email="admin@coreason.ai", groups=["Admin"])
+
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_user_context] = override_get_user_context
     client = TestClient(app)
     yield client
     app.dependency_overrides.clear()
