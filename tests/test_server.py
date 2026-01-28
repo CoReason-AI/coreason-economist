@@ -27,6 +27,9 @@ def mock_session() -> AsyncMock:
     # Mock execute result
     session.execute.return_value = MagicMock()
 
+    # session.add is a sync method
+    session.add = MagicMock()
+
     return session
 
 
